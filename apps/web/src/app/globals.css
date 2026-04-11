@@ -18,6 +18,21 @@
     background: rgba(124, 58, 237, 0.3);
     color: #f8f8ff;
   }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #08080f;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2a2a3e;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3d2d70;
+  }
 }
 
 @layer utilities {
@@ -42,7 +57,7 @@
   }
 
   .text-gradient-purple {
-    background: linear-gradient(135deg, #c084fc 0%, #7c3aed 50%, #a78bfa 100%);
+    background: linear-gradient(to right, #7c3aed, #a78bfa, #c084fc);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -63,17 +78,6 @@
       transparent 100%
     );
     opacity: 0.6;
-  }
-
-  /* Horizontal connector for flow steps */
-  .flow-connector::after {
-    content: "";
-    position: absolute;
-    top: 50%;
-    right: -1rem;
-    width: 2rem;
-    height: 1px;
-    background: linear-gradient(90deg, #2a2a3e, transparent);
   }
 
   /* Typing cursor animation */
@@ -108,7 +112,13 @@
     animation: marquee 30s linear infinite;
   }
 
-  /* Subtle grid pattern for hero */
+  /* Dot grid pattern for hero */
+  .dot-grid {
+    background-image: radial-gradient(circle, #2a2a3e 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* Legacy grid pattern (kept for compat) */
   .hero-grid-bg {
     background-image:
       linear-gradient(rgba(124, 58, 237, 0.03) 1px, transparent 1px),
@@ -116,7 +126,75 @@
     background-size: 64px 64px;
   }
 
-  /* Squiggly accent highlight — inline, bold, unmissable */
+  /* Radial glow */
+  .hero-radial-glow {
+    background: radial-gradient(
+      ellipse 600px 400px at 50% 40%,
+      rgba(124, 58, 237, 0.08),
+      transparent
+    );
+  }
+
+  /* Step connector dashed line for How It Works */
+  .step-connector {
+    position: relative;
+  }
+  .step-connector::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: -6px;
+    width: 12px;
+    border-top: 2px dashed #3d2d70;
+  }
+  @media (max-width: 768px) {
+    .step-connector::after {
+      display: none;
+    }
+  }
+
+  /* Code typewriter effect */
+  .code-line {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  .code-line.typed {
+    opacity: 1;
+    transform: translateX(0);
+    transition:
+      opacity 0.15s ease-out,
+      transform 0.15s ease-out;
+  }
+
+  /* Pricing table Recur column highlight */
+  .recur-col {
+    background: rgba(13, 13, 20, 0.6);
+    border-left: 2px solid #7c3aed;
+  }
+
+  /* Keeper status dot pulse */
+  .keeper-dot {
+    animation: keeperDotPulse 2s ease-in-out infinite;
+  }
+  @keyframes keeperDotPulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7);
+    }
+    50% {
+      box-shadow: 0 0 0 6px rgba(52, 211, 153, 0);
+    }
+  }
+
+  /* Pricing grid cell padding */
+  .pricing-grid td,
+  .pricing-grid th {
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 13px;
+  }
+
+  /* Squiggly accent highlight */
   .squiggly-highlight {
     position: relative;
     display: inline;
@@ -144,49 +222,49 @@
     background-repeat: repeat-x;
     background-size: 24px 8px;
   }
-
-  /* Radial glow */
-  .hero-radial-glow {
-    background: radial-gradient(
-      ellipse 600px 400px at 50% 40%,
-      rgba(124, 58, 237, 0.08),
-      transparent
-    );
-  }
 }
 
 @layer components {
   .btn-primary {
-    @apply bg-recur-primary text-white text-[13px] font-bold px-6 py-3 rounded-lg transition-all duration-200 hover:scale-[1.02] hover:brightness-110 cursor-pointer;
+    @apply bg-recur-primary text-white text-[13px] font-bold px-6 py-3 rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:brightness-110 cursor-pointer;
   }
 
   .btn-secondary {
-    @apply bg-transparent text-recur-light border border-[#3D2D70] text-[13px] font-semibold px-6 py-3 rounded-lg transition-all duration-200 hover:bg-recur-purple-tint cursor-pointer;
+    @apply bg-transparent text-recur-light border border-recur-border-light text-[13px] font-semibold px-6 py-3 rounded-[10px] transition-all duration-200 hover:border-recur-primary cursor-pointer;
   }
 
   .dark-card {
-    @apply bg-recur-surface border border-recur-border rounded-xl p-6 relative;
+    @apply bg-recur-surface border border-recur-border rounded-[14px] p-6 relative;
   }
 
   .dark-card-elevated {
-    @apply bg-recur-card border border-recur-border rounded-xl p-6 relative;
+    @apply bg-recur-card border border-recur-border rounded-[14px] p-6 relative;
   }
 
   /* Step number badge */
   .step-badge {
-    @apply text-[13px] font-bold text-recur-primary bg-recur-purple-tint w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-[#3D2D70];
+    @apply text-[11px] font-bold text-recur-primary bg-recur-purple-tint w-7 h-7 rounded-full flex items-center justify-center shrink-0 border border-recur-border-light font-mono;
   }
 
   /* Stat block */
   .stat-block {
-    @apply flex flex-col items-center text-center;
+    @apply flex flex-col;
   }
 
   .stat-value {
-    @apply text-[28px] md:text-[32px] font-extrabold text-recur-text-heading font-mono tracking-tight;
+    @apply text-[26px] font-[900] text-recur-text-heading font-mono;
   }
 
   .stat-label {
-    @apply text-[11px] text-recur-text-muted mt-1 uppercase tracking-wider;
+    @apply text-[11px] text-recur-text-muted mt-1;
+  }
+
+  /* Interactive demo button */
+  .recur-demo-btn {
+    transition: all 0.2s ease;
+  }
+  .recur-demo-btn:hover {
+    filter: brightness(1.15);
+    transform: scale(1.02);
   }
 }

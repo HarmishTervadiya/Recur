@@ -10,7 +10,7 @@ module.exports = {
           card: "#12121C",
           "purple-tint": "#1E1535",
           border: "#2A2A3E",
-          "border-light": "#3A3A5A",
+          "border-light": "#3D2D70",
 
           "deep-purple": "#4C1D95",
           primary: "#7C3AED",
@@ -28,6 +28,7 @@ module.exports = {
           "text-subheading": "#C4C4D4",
           "text-body": "#8B8BA7",
           "text-muted": "#6B6B8A",
+          "text-dim": "#4B4B6B",
         },
       },
       fontFamily: {
@@ -53,11 +54,39 @@ module.exports = {
           "0%": { opacity: "0", transform: "translateX(-12px)" },
           "100%": { opacity: "1", transform: "translateX(0)" },
         },
+        float: {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-6px)" },
+        },
+        glowPulse: {
+          "0%, 100%": {
+            boxShadow: "0 0 20px rgba(124, 58, 237, 0.15)",
+          },
+          "50%": {
+            boxShadow: "0 0 40px rgba(124, 58, 237, 0.3)",
+          },
+        },
+        txFade: {
+          "0%": { opacity: "0", transform: "translateY(-10px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        dotPulse: {
+          "0%, 100%": {
+            boxShadow: "0 0 0 0 rgba(52, 211, 153, 0.7)",
+          },
+          "50%": {
+            boxShadow: "0 0 0 6px rgba(52, 211, 153, 0)",
+          },
+        },
       },
       animation: {
         "pulse-dot": "pulseDot 2s ease-in-out infinite",
         "fade-in-up": "fadeInUp 0.6s ease-out forwards",
         "slide-in-right": "slideInRight 0.5s ease-out forwards",
+        float: "float 6s ease-in-out infinite",
+        "glow-pulse": "glowPulse 3s ease-in-out infinite",
+        "tx-fade": "txFade 0.4s ease-out forwards",
+        "dot-pulse": "dotPulse 2s ease-in-out infinite",
       },
       maxWidth: {
         container: "1120px",

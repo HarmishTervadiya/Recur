@@ -1,0 +1,23 @@
+{
+  "name": "@recur/keeper",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "lint": "echo lint:keeper"
+  },
+  "dependencies": {
+    "@recur/config": "*",
+    "@recur/db": "*",
+    "@recur/logger": "*",
+    "@recur/solana-client": "*",
+    "@recur/types": "*",
+    "@solana/web3.js": "^1.91.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.0",
+    "typescript": "^5.4.0"
+  }
+}

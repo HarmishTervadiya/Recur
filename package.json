@@ -1,0 +1,27 @@
+{
+  "name": "recur",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "dev:api": "turbo run dev --filter=@recur/api",
+    "dev:web": "turbo run dev --filter=@recur/web",
+    "dev:keeper": "turbo run dev --filter=@recur/keeper",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "db:generate": "bun run --filter=@recur/db generate",
+    "db:push": "bun run --filter=@recur/db db:push",
+    "db:migrate": "bun run --filter=@recur/db migrate"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.0",
+    "prettier": "^3.2.0",
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.0"
+  },
+  "packageManager": "bun@1.1.0"
+}

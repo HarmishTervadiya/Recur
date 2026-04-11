@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recur — UI Inspiration Board</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;background:#f9f9fb;color:#1a1a2e;padding:2rem 1rem}
+.wrap{max-width:860px;margin:0 auto;padding:1.5rem}
+.section{margin-bottom:2.5rem}
+.sec-label{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#888;margin-bottom:.5rem}
+.sec-title{font-size:17px;font-weight:600;color:#1a1a2e;margin-bottom:1rem;padding-bottom:.5rem;border-bottom:1px solid #e5e5ef}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.card{background:#fff;border:1px solid #e5e5ef;border-radius:12px;padding:1rem 1.1rem}
+.card-title{font-size:13px;font-weight:600;color:#1a1a2e;margin-bottom:.35rem}
+.card-desc{font-size:12px;line-height:1.6;color:#555}
+
+.steal-row{display:flex;flex-direction:column;gap:8px}
+.steal-item{padding:10px 12px;border-radius:10px;border:1px solid #e5e5ef;background:#fff}
+.steal-from{font-size:10px;font-weight:600;color:#888;margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em}
+.steal-what{font-size:13px;color:#1a1a2e;font-weight:600;margin-bottom:2px}
+.steal-why{font-size:12px;color:#555;line-height:1.5}
+.steal-item code{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11px;background:#f0f0f8;padding:1px 4px;border-radius:3px;color:#7C3AED}
+
+.palette-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:.75rem}
+
+.section-flow{display:flex;flex-direction:column;gap:6px}
+.flow-item{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:#f5f5fb;border-radius:10px;border-left:3px solid #7C3AED}
+.flow-num{font-size:11px;font-weight:700;color:#7C3AED;min-width:18px}
+.flow-name{font-size:13px;font-weight:600;color:#1a1a2e}
+.flow-detail{font-size:11px;color:#666;line-height:1.5;margin-top:2px}
+
+.motion-list{display:flex;flex-direction:column;gap:6px}
+.motion-item{font-size:12px;color:#555;padding:8px 10px;background:#f5f5fb;border-radius:10px;display:flex;gap:8px;align-items:flex-start;line-height:1.6}
+.motion-dot{width:7px;height:7px;border-radius:50%;background:#7C3AED;margin-top:4px;flex-shrink:0}
+
+.verdict-box{background:#f5f5fb;border-radius:12px;padding:1rem 1.25rem;border:1px solid #e5e5ef}
+.verdict-line{font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:.35rem}
+.verdict-sub{font-size:12px;color:#555;line-height:1.6}
+
+/* dark mockup sections */
+.mockup-nav{background:#08080F;border-bottom:1px solid #1E1E2E;padding:.6rem 1rem;display:flex;align-items:center;justify-content:space-between;border-radius:12px 12px 0 0}
+.nav-logo{font-size:14px;font-weight:800;color:#A78BFA;letter-spacing:.05em}
+.nav-links{display:flex;gap:16px}
+.nav-link{font-size:11px;color:#6B6B8A}
+.nav-cta{font-size:11px;font-weight:700;color:#fff;background:#7C3AED;padding:5px 12px;border-radius:6px}
+
+.mockup-hero{background:#0D0D14;border-radius:0 0 12px 12px;padding:2rem 1.5rem;margin-bottom:1rem;border:1px solid #2A2A3E;border-top:none}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#A78BFA;background:#1E1535;border:1px solid #3D2D70;border-radius:20px;padding:4px 12px;margin-bottom:1rem}
+.hero-dot{width:6px;height:6px;border-radius:50%;background:#7C3AED}
+.hero-h1{font-size:28px;font-weight:800;color:#F8F8FF;line-height:1.25;margin-bottom:.75rem;letter-spacing:-.02em}
+.hero-h1 span{color:#A78BFA}
+.hero-sub{font-size:13px;color:#8B8BA7;line-height:1.6;margin-bottom:1.25rem;max-width:380px}
+.hero-ctas{display:flex;gap:8px;flex-wrap:wrap}
+.btn-primary{font-size:12px;font-weight:700;padding:9px 18px;border-radius:8px;background:#7C3AED;color:#fff;border:none;cursor:pointer}
+.btn-secondary{font-size:12px;font-weight:600;padding:9px 18px;border-radius:8px;background:transparent;color:#A78BFA;border:1px solid #3D2D70;cursor:pointer}
+.hero-stats{display:flex;gap:1.5rem;margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid #1E1E2E;flex-wrap:wrap}
+.stat-num{font-size:20px;font-weight:800;color:#F8F8FF}
+.stat-label{font-size:10px;color:#6B6B8A;margin-top:1px}
+
+.code-block{background:#0D0D14;border-radius:10px;padding:1rem 1.1rem;font-family:'JetBrains Mono','Fira Code','Courier New',monospace;font-size:12px;color:#A78BFA;border:1px solid #2A2A3E;margin-top:.5rem;line-height:1.8}
+.code-comment{color:#4B4B6B}
+.code-purple{color:#C084FC}
+.code-green{color:#34D399}
+.code-white{color:#F8F8FF}
+.code-orange{color:#FB923C}
+
+.mockup-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:1rem}
+.stat-card{background:#0D0D14;border:1px solid #2A2A3E;border-radius:10px;padding:.75rem}
+.stat-card-num{font-size:18px;font-weight:800;color:#F8F8FF;margin-bottom:2px}
+.stat-card-label{font-size:10px;color:#6B6B8A}
+.stat-card-delta{font-size:10px;color:#34D399;margin-top:3px}
+
+.db-wrap{background:#08080F;border:1px solid #2A2A3E;border-radius:12px;padding:1.25rem}
+.db-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
+.db-title{font-size:13px;font-weight:700;color:#F8F8FF}
+.db-badge{font-size:10px;color:#34D399;background:#0A2A1A;border:1px solid #1A4A2A;padding:3px 10px;border-radius:20px}
+.db-recent{background:#0D0D14;border:1px solid #2A2A3E;border-radius:8px;padding:.75rem}
+.db-recent-label{font-size:10px;color:#6B6B8A;margin-bottom:.6rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.db-row{display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:3px 0}
+.db-addr{color:#8B8BA7;font-family:'JetBrains Mono','Fira Code',monospace}
+.db-success{color:#34D399}
+.db-fail{color:#F87171}
+.db-time{color:#4B4B6B}
+
+.type-block{background:#fff;border:1px solid #e5e5ef;border-radius:12px;padding:1.25rem;display:flex;flex-direction:column;gap:10px}
+.type-row-item{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding-bottom:8px;border-bottom:1px solid #f0f0f8}
+.type-row-item:last-child{border-bottom:none;padding-bottom:0}
+.type-meta{font-size:10px;color:#888;min-width:130px;flex-shrink:0;font-family:'JetBrains Mono','Fira Code',monospace}
+
+@media(max-width:600px){
+  .grid2,.grid3{grid-template-columns:1fr}
+  .hero-h1{font-size:22px}
+  .mockup-stats{grid-template-columns:1fr 1fr}
+  .hero-stats{gap:1rem}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div style="margin-bottom:2rem">
+  <div style="font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#888;margin-bottom:.35rem">Recur · Frontend Design System</div>
+  <div style="font-size:22px;font-weight:800;color:#7C3AED;margin-bottom:.25rem">UI Inspiration Board</div>
+  <div style="font-size:13px;color:#666">For the frontend engineer — Colosseum Frontier Hackathon 2026</div>
+</div>
+
+<div class="section">
+  <div class="sec-label">Design identity</div>
+  <div class="sec-title">Direction in one sentence</div>
+  <div class="verdict-box">
+    <div class="verdict-line">"Stripe discipline meets Solana dark energy — brutally clear, technically beautiful, zero fluff."</div>
+    <div class="verdict-sub">Dark-first. Purple-led. Code-forward. Every section should feel like a developer tool that happens to look incredible. Think Linear + Vercel + Superfluid: the confidence of enterprise SaaS with the aesthetic of a Web3 protocol. Nothing decorative lives here — everything visual earns its place by making the product more understandable.</div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-label">Competitor analysis</div>
+  <div class="sec-title">What to steal, what to avoid</div>
+  <div class="steal-row">
+    <div class="steal-item">
+      <div class="steal-from">Stripe billing docs</div>
+      <div class="steal-what">The "how it works" numbered step flow</div>
+      <div class="steal-why">Stripe never uses flashy graphics to explain subscription flow — they use clean numbered steps with a product screenshot on the right. Each step is one sentence. Copy this exact structure for your "how Recur works" section. It reads as authoritative, not salesy.</div>
+    </div>
+    <div class="steal-item">
+      <div class="steal-from">BoomFi subscriptions page</div>
+      <div class="steal-what">The "how it works" horizontal card journey</div>
+      <div class="steal-why">BoomFi uses 4 horizontal cards — Authorise, Confirm, Notify, Charge — each with an icon and one line of text. Clean and scannable. Steal this layout but make yours darker, more technical, and replace their generic icons with Solana-specific language (SPL Approve, Keeper, PDA, Webhook).</div>
+    </div>
+    <div class="steal-item">
+      <div class="steal-from">Loop Crypto payments</div>
+      <div class="steal-what">The embedded <code>pay widget</code> demo</div>
+      <div class="steal-why">Loop embeds a live-looking payment component in the landing page itself. It's interactive and converts well because it makes the product tangible. Do the same — embed a fake but pixel-perfect &lt;RecurButton /&gt; that can be clicked to show the Phantom modal simulation.</div>
+    </div>
+    <div class="steal-item">
+      <div class="steal-from">Sablier</div>
+      <div class="steal-what">The stream visualisation animation</div>
+      <div class="steal-why">Sablier uses an animated bar that fills over time to represent streaming money. Adapt this: show an animated "next billing" countdown bar with a USDC pulse when payment fires. Turns an abstract concept into something visceral.</div>
+    </div>
+    <div class="steal-item">
+      <div class="steal-from">Superfluid (Cuberto redesign)</div>
+      <div class="steal-what">Dark background, vivid purple accent, large type</div>
+      <div class="steal-why">Superfluid's redesign by Cuberto nailed the aesthetic: near-black background (#08080F), vivid purple as the only accent, oversized bold headline, clean sans body text. This is the exact visual register Recur should hit. Not neon — sophisticated. Purple is the common thread between Recur and Solana's brand identity.</div>
+    </div>
+    <div class="steal-item">
+      <div class="steal-from">GoCardless</div>
+      <div class="steal-what">The pricing transparency section</div>
+      <div class="steal-why">GoCardless has a brutally honest "here's what you pay vs competitors" section with a table. Adopt this exact format but make the numbers devastating: Stripe at $0.59, Recur at $0.075. A table that makes competitors look expensive is more powerful than any copywriter.</div>
+    </div>
+    <div class="steal-item">
+      <div class="steal-from">Mercuryo</div>
+      <div class="steal-what">The "trusted by" logo strip with volume stat</div>
+      <div class="steal-why">Mercuryo leads with "$5B+ processed" and a logo row. Pre-launch, adapt this: list Superteam, Colosseum, Devnet integrations — and put "built at Frontier Hackathon 2026" as a trust signal. Credibility before social proof is available.</div>
+    </div>
+    <div class="steal-item">
+      <div class="steal-from">INQUD recurring payments — AVOID THIS</div>
+      <div class="steal-what">Wall of copy, text-heavy hero</div>
+      <div class="steal-why">INQUD's recurring payments page opens with a paragraph. Never do this. The hero should have a max 12-word headline, 2-line subhead, and two CTAs. Everything else lives in sections below the fold. Developers scan, they don't read.</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-label">Colour system</div>
+  <div class="sec-title">Exact palette — give these hex codes to your dev</div>
+  <div style="background:#0D0D14;border-radius:12px;padding:1.25rem;border:1px solid #2A2A3E">
+
+    <div style="font-size:10px;color:#6B6B8A;margin-bottom:.5rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase">Backgrounds</div>
+    <div class="palette-row">
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+        <div style="width:44px;height:44px;background:#08080F;border-radius:6px;border:1px solid #2A2A3E"></div>
+        <div style="font-size:9px;color:#6B6B8A;font-family:monospace">#08080F</div>
+        <div style="font-size:9px;color:#4B4B6B">base</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+        <div style="width:44px;height:44px;background:#0D0D14;border-radius:6px;border:1px solid #2A2A3E"></div>
+        <div style="font-size:9px;color:#6B6B8A;font-family:monospace">#0D0D14</div>
+        <div style="font-size:9px;color:#4B4B6B">surface</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+        <div style="width:44px;height:44px;background:#12121C;border-radius:6px;border:1px solid #2A2A3E"></div>
+        <div style="font-size:9px;color:#6B6B8A;font-family:monospace">#12121C</div>
+        <div style="font-size:9px;color:#4B4B6B">card</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+        <div style="width:44px;height:44px;background:#1E1535;border-radius:6px;border:1px solid #2A2A3E"></div>
+        <div style="font-size:9px;color:#6B6B8A;font-family:monospace">#1E1535</div>
+        <div style="font-size:9px;color:#4B4B6B">purple tint</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+        <div style="width:44px;height:44px;background:#2A2A3E;border-radius:6px;border:1px solid #3A3A5A"></div>
+        <div style="font-size:9px;color:#6B6B8A;font-family:monospace">#2A2A3E</div>
+        <div style="font-size:9px;color:#4B4B6B">border</div>
+      </div>
+    </div>
+
+    <div style="font-size:10px;color:#6B6B8A;margin-bottom:.5rem;margin-top:.75rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase">Brand purples</div>
+    <div class="palette-row">
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+        <div style="width:44px;height:44px;background:#4C1D95;border-radius:6px"></div>
+        <div style="font-size:9px;color:#6B6B8A;font-family:monospace">#4C1D95</div>
+        <div style="font-size:9px;color:#4B4B6B">deep</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+        <div style="width:44px;height:44px;background:#7C3AED;border-radius:6px"></div>
+        <div style="font-size:9px;color:#6B6B8A;font-family:monospace">#7C3AED</div>
+        <div style="font-size:9px;color:#4B4B6B">primary</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+        <div style="width:44px;height:44px;background:#8B5CF6;border-radius:6px"></div>
+        <div style="font-size:9px;color:#6B6B8A;font-family:monospace">#8B5CF6</div>
+        <div style="font-size:9px;color:#4B4B6B">mid</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+        <div style="width:44px;height:44px;background:#A78BFA;border-radius:6px"></div>
+        <div style="font-size:9px;color:#6B6B8A;font-family:monospace">#A78BFA</div>
+        <div style="font-size:9px;color:#4B4B6B">light</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+        <div style="width:44px;height:44px;background:#C084FC;border-radius:6px"></div>
+        <div style="font-size:9px;color:#6B6B8A;font-family:monospace">#C084FC</div>
+        <div style="font-size:9px;color:#4B4B6B">glow</div>
+      </div>
+    </div>
+
+    <div style="font-size:10px;color:#6B6B8A;margin-bottom:.5rem;margin-top:.75rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase">Semantic / accents</div>
+    <div class="palette-row">
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+        <div style="width:44px;height:44px;background:#34D399;border-radius:6px"></div>
+        <div style="font-size:9px;color:#6B6B8A;font-family:monospace">#34D399</div>
+        <div style="font-size:9px;color:#4B4B6B">success</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+        <div style="width:44px;height:44px;background:#F59E0B;border-radius:6px"></div>
+        <div style="font-size:9px;color:#6B6B8A;font-family:monospace">#F59E0B</div>
+        <div style="font-size:9px;color:#4B4B6B">warning</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+        <div style="width:44px;height:44px;background:#F87171;border-radius:6px"></div>
+        <div style="font-size:9px;color:#6B6B8A;font-family:monospace">#F87171</div>
+        <div style="font-size:9px;color:#4B4B6B">error</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+        <div style="width:44px;height:44px;background:#14F195;border-radius:6px"></div>
+        <div style="font-size:9px;color:#6B6B8A;font-family:monospace">#14F195</div>
+        <div style="font-size:9px;color:#4B4B6B">solana green</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+        <div style="width:44px;height:44px;background:#9945FF;border-radius:6px"></div>
+        <div style="font-size:9px;color:#6B6B8A;font-family:monospace">#9945FF</div>
+        <div style="font-size:9px;color:#4B4B6B">solana purple</div>
+      </div>
+    </div>
+
+    <div style="font-size:10px;color:#6B6B8A;margin-bottom:.5rem;margin-top:.75rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase">Text hierarchy</div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap">
+      <div><div style="font-size:14px;color:#F8F8FF;font-weight:800">Heading</div><div style="font-size:9px;color:#4B4B6B;font-family:monospace">#F8F8FF / 800</div></div>
+      <div><div style="font-size:14px;color:#C4C4D4;font-weight:600">Subheading</div><div style="font-size:9px;color:#4B4B6B;font-family:monospace">#C4C4D4 / 600</div></div>
+      <div><div style="font-size:14px;color:#8B8BA7">Body</div><div style="font-size:9px;color:#4B4B6B;font-family:monospace">#8B8BA7 / 400</div></div>
+      <div><div style="font-size:14px;color:#6B6B8A">Muted</div><div style="font-size:9px;color:#4B4B6B;font-family:monospace">#6B6B8A / 400</div></div>
+      <div><div style="font-size:14px;color:#A78BFA;font-weight:600">Accent</div><div style="font-size:9px;color:#4B4B6B;font-family:monospace">#A78BFA / 600</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-label">Typography</div>
+  <div class="sec-title">Type scale — exactly this, nothing else</div>
+  <div class="type-block">
+    <div class="type-row-item">
+      <div class="type-meta">Hero · 64px / 800</div>
+      <div style="font-size:22px;font-weight:800;color:#1a1a2e;letter-spacing:-.03em">Recur</div>
+    </div>
+    <div class="type-row-item">
+      <div class="type-meta">H1 · 40px / 800</div>
+      <div style="font-size:17px;font-weight:800;color:#1a1a2e;letter-spacing:-.02em">The Stripe for Solana</div>
+    </div>
+    <div class="type-row-item">
+      <div class="type-meta">H2 · 28px / 700</div>
+      <div style="font-size:14px;font-weight:700;color:#1a1a2e">How it works</div>
+    </div>
+    <div class="type-row-item">
+      <div class="type-meta">Body · 16px / 400</div>
+      <div style="font-size:13px;color:#555">Users sign once. Keepers handle the rest.</div>
+    </div>
+    <div class="type-row-item">
+      <div class="type-meta">Code · mono / 400</div>
+      <div style="font-size:12px;color:#555;font-family:'JetBrains Mono','Fira Code',monospace">npm install @recur/react</div>
+    </div>
+    <div style="font-size:11px;color:#888;padding-top:.25rem">Recommended fonts: Inter (headings + body) + JetBrains Mono (code). Both on Google Fonts, free.</div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-label">Hero mockup</div>
+  <div class="sec-title">Exactly what the hero section should feel like</div>
+  <div class="mockup-nav">
+    <div class="nav-logo">RECUR</div>
+    <div class="nav-links">
+      <div class="nav-link">docs</div>
+      <div class="nav-link">pricing</div>
+      <div class="nav-link">github</div>
+    </div>
+    <div class="nav-cta">launch app</div>
+  </div>
+  <div class="mockup-hero">
+    <div class="hero-badge">
+      <div class="hero-dot"></div>
+      built on solana · colosseum frontier 2026
+    </div>
+    <div class="hero-h1">Recurring billing.<br><span>On-chain. Once.</span></div>
+    <div class="hero-sub">Users sign one transaction. Keepers collect every billing date automatically. Merchants get USDC direct to wallet — no bank, no KYC, no EVM.</div>
+    <div class="hero-ctas">
+      <button class="btn-primary">start building</button>
+      <button class="btn-secondary">view docs</button>
+    </div>
+    <div class="hero-stats">
+      <div><div class="stat-num">$0.001</div><div class="stat-label">per execution</div></div>
+      <div><div class="stat-num">400ms</div><div class="stat-label">finality</div></div>
+      <div><div class="stat-num">3 lines</div><div class="stat-label">to integrate</div></div>
+      <div><div class="stat-num">195+</div><div class="stat-label">countries</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-label">Code component</div>
+  <div class="sec-title">The SDK code block — homepage must have this</div>
+  <div class="code-block">
+    <div class="code-comment">// install</div>
+    <div><span class="code-white">npm install</span> <span class="code-green">@recur/react</span></div>
+    <br>
+    <div class="code-comment">// drop into any solana dApp</div>
+    <div><span class="code-purple">import</span> <span class="code-white">{ RecurButton }</span> <span class="code-purple">from</span> <span class="code-green">'@recur/react'</span></div>
+    <br>
+    <div><span class="code-purple">export default function</span> <span class="code-orange">PricingPage</span><span class="code-white">() {</span></div>
+    <div style="padding-left:1.5rem"><span class="code-purple">return</span> <span class="code-white">(</span></div>
+    <div style="padding-left:3rem"><span class="code-white">&lt;</span><span class="code-orange">RecurButton</span></div>
+    <div style="padding-left:4.5rem"><span class="code-green">planId</span><span class="code-white">="premium_pass"</span></div>
+    <div style="padding-left:4.5rem"><span class="code-green">amount</span><span class="code-white">={5}</span></div>
+    <div style="padding-left:4.5rem"><span class="code-green">interval</span><span class="code-white">="monthly"</span></div>
+    <div style="padding-left:3rem"><span class="code-white">/&gt;</span></div>
+    <div style="padding-left:1.5rem"><span class="code-white">)</span></div>
+    <div><span class="code-white">}</span></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-label">Dashboard mockup</div>
+  <div class="sec-title">Merchant dashboard — how it should feel</div>
+  <div class="db-wrap">
+    <div class="db-header">
+      <div class="db-title">ItsU Premium Pass</div>
+      <div class="db-badge">live on devnet</div>
+    </div>
+    <div class="mockup-stats">
+      <div class="stat-card">
+        <div class="stat-card-num">$2,400</div>
+        <div class="stat-card-label">monthly MRR</div>
+        <div class="stat-card-delta">+12.4% this month</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-num">480</div>
+        <div class="stat-card-label">active subscribers</div>
+        <div class="stat-card-delta">+34 this week</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-num">98.2%</div>
+        <div class="stat-card-label">collection rate</div>
+        <div class="stat-card-delta">last 30 days</div>
+      </div>
+    </div>
+    <div class="db-recent">
+      <div class="db-recent-label">recent payments</div>
+      <div class="db-row"><div class="db-addr">7xKX...4mPQ</div><div class="db-success">+$5.00 USDC</div><div class="db-time">2s ago</div></div>
+      <div class="db-row"><div class="db-addr">3rLM...8vXZ</div><div class="db-success">+$5.00 USDC</div><div class="db-time">1m ago</div></div>
+      <div class="db-row"><div class="db-addr">9tNB...2kRW</div><div class="db-success">+$5.00 USDC</div><div class="db-time">3m ago</div></div>
+      <div class="db-row"><div class="db-addr">5sQE...7hYP</div><div class="db-fail">failed — low balance</div><div class="db-time">5m ago</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-label">Page structure</div>
+  <div class="sec-title">Exact section order — give this to your dev</div>
+  <div class="section-flow">
+    <div class="flow-item"><div class="flow-num">01</div><div><div class="flow-name">Nav — sticky, minimal</div><div class="flow-detail">Logo left, 3 text links center, "launch app" button right. Transparent background that transitions to #08080F on scroll. No hamburger on desktop.</div></div></div>
+    <div class="flow-item"><div class="flow-num">02</div><div><div class="flow-name">Hero — the only section that matters</div><div class="flow-detail">Badge pill ("built on Solana") → H1 max 12 words → 2-line subhead → 2 CTAs → 4 stat chips. No hero image — a live animated RecurButton demo or a subtle grid pattern is enough. Full viewport height.</div></div></div>
+    <div class="flow-item"><div class="flow-num">03</div><div><div class="flow-name">Problem — 3 pain points in 3 cards</div><div class="flow-detail">Manual signing / Capital lockup / No SDK. Dark cards with a one-sentence description each. Optional: crossed-out competitor approach on each card, Recur's fix below.</div></div></div>
+    <div class="flow-item"><div class="flow-num">04</div><div><div class="flow-name">How it works — 4 step horizontal flow</div><div class="flow-detail">User approves SPL delegate → PDA created → Keeper fires every 30 days → Merchant gets USDC + webhook. Steal BoomFi's horizontal card pattern. Add a faint connector line between cards. On mobile: vertical stack.</div></div></div>
+    <div class="flow-item"><div class="flow-num">05</div><div><div class="flow-name">SDK code block — developer hook</div><div class="flow-detail">Left: 3 steps (install, import, render). Right: dark terminal-style preview. Copy button. Tab switcher for npm / yarn / pnpm. This is where developer trust is built.</div></div></div>
+    <div class="flow-item"><div class="flow-num">06</div><div><div class="flow-name">Pricing — transparent, devastating</div><div class="flow-detail">$0.05 flat + 0.25% volume + $49/mo Pro. Table comparing to Stripe (2.9% + $0.30) and GoCardless ($0.20 min). Pro tier card elevated with a purple border.</div></div></div>
+    <div class="flow-item"><div class="flow-num">07</div><div><div class="flow-name">Vs Stripe — the credibility section</div><div class="flow-detail">Stripe validated the market. Here's what they can't do: 4 pills (Solana only / any country / USDC direct / game SDK). One sentence per point.</div></div></div>
+    <div class="flow-item"><div class="flow-num">08</div><div><div class="flow-name">CTA footer — one job</div><div class="flow-detail">"Start building in 5 minutes" → "read the docs" link + "connect wallet" primary button. Dark background, centered, generous vertical padding.</div></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-label">Motion & animation</div>
+  <div class="sec-title">What to animate — and what to leave still</div>
+  <div class="motion-list">
+    <div class="motion-item"><div class="motion-dot"></div><div>Keeper pulse: a green dot that pulses every 60 seconds in the hero — "Keeper is live." Subtle. Never distracting. Think the Vercel deployment indicator.</div></div>
+    <div class="motion-item"><div class="motion-dot"></div><div>Transaction stream: in the dashboard mockup section, payments should fade in from the top at a 2–3 second interval. Shows Recur is working, live.</div></div>
+    <div class="motion-item"><div class="motion-dot"></div><div>Code highlight: on scroll into the SDK section, the code block types itself in with a cursor. 800ms total. Stop once visible — don't loop.</div></div>
+    <div class="motion-item"><div class="motion-dot"></div><div>Stat counters: the 4 hero stat chips count up from 0 on page load. $0.001 counts from 0 in 600ms. Use CSS counter-animation or JS IntersectionObserver.</div></div>
+    <div class="motion-item"><div class="motion-dot"></div><div>Section fade-in: every section fades in with a slight upward translate (translateY 12px → 0) as it enters viewport. 300ms ease-out. Standard, professional, expected in 2026.</div></div>
+    <div class="motion-item"><div class="motion-dot"></div><div>Button hover: primary CTA scales to 1.02 and background lightens by 10%. Not a colour shift — a brightness lift. Keeps the purple consistent.</div></div>
+    <div class="motion-item"><div class="motion-dot"></div><div>What NOT to animate: the hero background (no particle fields, no floating orbs), card borders (no "glow on hover"), logos in the trust strip. Stillness = confidence.</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-label">Component rules</div>
+  <div class="sec-title">The 6 rules your dev must not break</div>
+  <div class="grid2">
+    <div class="card"><div class="card-title">One purple, one white — that's it</div><div class="card-desc">Every CTA is either #7C3AED filled (primary) or text-only #A78BFA (secondary). No green buttons, no blue buttons, no orange. Purple is the brand signal — diluting it with other CTA colours kills identity.</div></div>
+    <div class="card"><div class="card-title">Borders not shadows</div><div class="card-desc">Cards use 0.5px border #2A2A3E on dark backgrounds. Never box-shadow for depth — it reads as dated on dark UIs. Depth comes from layered background colours (#08080F → #0D0D14 → #12121C).</div></div>
+    <div class="card"><div class="card-title">Mono font for all on-chain data</div><div class="card-desc">Wallet addresses, tx hashes, amounts, timestamps — always JetBrains Mono or Fira Code. This signals "this is real chain data." Never render a Solana address in Inter — it looks like a typo.</div></div>
+    <div class="card"><div class="card-title">Green is success only</div><div class="card-desc">#34D399 is reserved for confirmed payments, active status, positive deltas. Never use it decoratively. Users are conditioned to read green as "money moved." Use it that way and only that way.</div></div>
+    <div class="card"><div class="card-title">Max container width 1120px</div><div class="card-desc">Content never bleeds wider than 1120px. Padding left/right min 24px on mobile. Sections are centred. Full-bleed backgrounds are allowed (hero, CTA footer) but content inside stays in the container.</div></div>
+    <div class="card"><div class="card-title">Mobile-first, not mobile-adapted</div><div class="card-desc">The code block, how-it-works cards, and pricing table — all built mobile-first and scale up. Solana game devs check landing pages on phone. If it sucks on iPhone 15, it doesn't ship.</div></div>
+  </div>
+</div>
+
+<div style="text-align:center;padding:2rem 0 1rem;border-top:1px solid #e5e5ef;margin-top:1rem">
+  <div style="font-size:12px;color:#888">Recur · Colosseum Frontier Hackathon 2026 · UI Inspiration Board</div>
+  <div style="font-size:11px;color:#aaa;margin-top:4px">Share with frontend engineer — open in any browser</div>
+</div>
+
+</div>
+</body>
+</html>

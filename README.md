@@ -2,7 +2,7 @@
 
 > Stripe for Solana. Decentralised, automated recurring billing for Web3 SaaS, games, and DAOs.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
 [![Built with Bun](https://img.shields.io/badge/Built%20with-Bun-fbf0df)](https://bun.sh)
 [![Turborepo](https://img.shields.io/badge/Monorepo-Turborepo-EF4444)](https://turbo.build)
 [![Anchor](https://img.shields.io/badge/Smart%20Contracts-Anchor-512DA8)](https://anchor-lang.com)
@@ -171,7 +171,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contribution guide.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+**Business Source License (BSL 1.1)**
+
+Anyone can view this code, audit it, and use it for personal projects, but you are legally forbidden from using this code in a commercial product that competes with Recur for 4 years.
+
+See [LICENSE](LICENSE) for the full text.
 
 ---
 

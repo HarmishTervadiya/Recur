@@ -1,3 +1,192 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-recur-base text-recur-text-body font-sans antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply text-recur-text-heading;
+  }
+
+  ::selection {
+    background: rgba(124, 58, 237, 0.3);
+    color: #f8f8ff;
+  }
+}
+
+@layer utilities {
+  .section-animate {
+    opacity: 0;
+    transform: translateY(16px);
+    transition:
+      opacity 0.7s cubic-bezier(0.19, 1, 0.22, 1),
+      transform 0.7s cubic-bezier(0.19, 1, 0.22, 1);
+  }
+
+  .section-animate.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .text-gradient {
+    background: linear-gradient(135deg, #f8f8ff 0%, #a78bfa 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .text-gradient-purple {
+    background: linear-gradient(135deg, #c084fc 0%, #7c3aed 50%, #a78bfa 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Subtle top-glow line for accent cards */
+  .glow-line-top::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      #7c3aed 50%,
+      transparent 100%
+    );
+    opacity: 0.6;
+  }
+
+  /* Horizontal connector for flow steps */
+  .flow-connector::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: -1rem;
+    width: 2rem;
+    height: 1px;
+    background: linear-gradient(90deg, #2a2a3e, transparent);
+  }
+
+  /* Typing cursor animation */
+  .typing-cursor::after {
+    content: "|";
+    animation: blink 1s step-end infinite;
+    color: #7c3aed;
+    font-weight: 400;
+  }
+
+  @keyframes blink {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0;
+    }
+  }
+
+  /* Marquee for trust strip */
+  @keyframes marquee {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+
+  .animate-marquee {
+    animation: marquee 30s linear infinite;
+  }
+
+  /* Subtle grid pattern for hero */
+  .hero-grid-bg {
+    background-image:
+      linear-gradient(rgba(124, 58, 237, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(124, 58, 237, 0.03) 1px, transparent 1px);
+    background-size: 64px 64px;
+  }
+
+  /* Squiggly accent highlight — inline, bold, unmissable */
+  .squiggly-highlight {
+    position: relative;
+    display: inline;
+    color: #f8f8ff;
+    font-weight: 700;
+    background: linear-gradient(
+      135deg,
+      rgba(124, 58, 237, 0.2) 0%,
+      rgba(167, 139, 250, 0.15) 100%
+    );
+    padding: 2px 6px;
+    border-radius: 4px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+
+  .squiggly-highlight::after {
+    content: "";
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    bottom: -3px;
+    height: 8px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 8'%3E%3Cpath d='M0 4 Q6 0 12 4 Q18 8 24 4' fill='none' stroke='%23A78BFA' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: repeat-x;
+    background-size: 24px 8px;
+  }
+
+  /* Radial glow */
+  .hero-radial-glow {
+    background: radial-gradient(
+      ellipse 600px 400px at 50% 40%,
+      rgba(124, 58, 237, 0.08),
+      transparent
+    );
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-recur-primary text-white text-[13px] font-bold px-6 py-3 rounded-lg transition-all duration-200 hover:scale-[1.02] hover:brightness-110 cursor-pointer;
+  }
+
+  .btn-secondary {
+    @apply bg-transparent text-recur-light border border-[#3D2D70] text-[13px] font-semibold px-6 py-3 rounded-lg transition-all duration-200 hover:bg-recur-purple-tint cursor-pointer;
+  }
+
+  .dark-card {
+    @apply bg-recur-surface border border-recur-border rounded-xl p-6 relative;
+  }
+
+  .dark-card-elevated {
+    @apply bg-recur-card border border-recur-border rounded-xl p-6 relative;
+  }
+
+  /* Step number badge */
+  .step-badge {
+    @apply text-[13px] font-bold text-recur-primary bg-recur-purple-tint w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-[#3D2D70];
+  }
+
+  /* Stat block */
+  .stat-block {
+    @apply flex flex-col items-center text-center;
+  }
+
+  .stat-value {
+    @apply text-[28px] md:text-[32px] font-extrabold text-recur-text-heading font-mono tracking-tight;
+  }
+
+  .stat-label {
+    @apply text-[11px] text-recur-text-muted mt-1 uppercase tracking-wider;
+  }
+}

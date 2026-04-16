@@ -1,7 +1,8 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::program_option::COption;
 use anchor_spl::token::{self, Token, TokenAccount, TransferChecked};
 
-declare_id!("11111111111111111111111111111111");
+declare_id!("Du86TLvDNSzGf1hkb6cVPoQpHPCwYiRXnGKm3J1GAgFj");
 
 #[program]
 pub mod recur {
@@ -75,17 +76,25 @@ pub mod recur {
         let decimals = ctx.accounts.mint.decimals;
 
         // CPI: transfer_checked from subscriber → merchant using the
-        // subscriber's pre-approved delegation.
-        let cpi_ctx = CpiContext::new(
+        // subscription PDA's pre-approved delegation.
+        let seeds = &[
+            b"subscription",
+            ctx.accounts.subscriber.key.as_ref(),
+            ctx.accounts.merchant.key.as_ref(),
+            &[ctx.accounts.subscription.bump],
+        ];
+        let signer_seeds = &[&seeds[..]];
+
+        let cpi_ctx = CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
             TransferChecked {
                 from: ctx.accounts.subscriber_token_account.to_account_info(),
                 mint: ctx.accounts.mint.to_account_info(),
                 to: ctx.accounts.merchant_token_account.to_account_info(),
-                // The subscriber is the owner/authority of their token account.
-                // The Keeper initiates the tx; SPL Token validates the delegation.
-                authority: ctx.accounts.subscriber.to_account_info(),
+                // The subscription PDA is the delegated transfer authority.
+                authority: ctx.accounts.subscription.to_account_info(),
             },
+            signer_seeds,
         );
 
         token::transfer_checked(cpi_ctx, amount, decimals)
@@ -227,6 +236,10 @@ pub struct ProcessPayment<'info> {
         mut,
         constraint = subscriber_token_account.owner == subscriber.key()
             @ RecurError::InvalidTokenAccountOwner,
+        constraint = subscriber_token_account.delegate == COption::Some(subscription.key())
+            @ RecurError::InvalidDelegate,
+        constraint = subscriber_token_account.delegated_amount >= subscription.amount
+            @ RecurError::InsufficientDelegatedAmount,
         constraint = subscriber_token_account.mint == mint.key()
             @ RecurError::InvalidMint,
     )]
@@ -364,6 +377,12 @@ pub enum RecurError {
 
     #[msg("Token account mint does not match the expected mint.")]
     InvalidMint,
+
+    #[msg("Token account delegate does not match the subscription PDA.")]
+    InvalidDelegate,
+
+    #[msg("Delegated token allowance is below the subscription amount.")]
+    InsufficientDelegatedAmount,
 
     #[msg("Cancellation has already been requested for this subscription.")]
     CancelAlreadyRequested,

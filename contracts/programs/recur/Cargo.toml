@@ -15,6 +15,9 @@ no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+# Disable multisig key guards so localnet tests can call treasury instructions
+# with any funded keypair. NEVER enable on mainnet/devnet deployments.
+testing = []
 
 [dependencies]
 anchor-lang = { version = "0.32.0", features = ["init-if-needed"] }

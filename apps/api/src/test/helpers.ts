@@ -1,0 +1,83 @@
+import { vi } from "vitest";
+import { mockDeep, mockReset } from "vitest-mock-extended";
+import type { PrismaClient } from "@recur/db";
+import type { Express } from "express";
+import jwt from "jsonwebtoken";
+
+export const prismaMock = mockDeep<PrismaClient>();
+
+beforeEach(() => {
+  mockReset(prismaMock);
+});
+
+vi.mock("@recur/db", () => ({
+  prisma: prismaMock,
+}));
+
+vi.mock("@recur/logger", () => ({
+  createLogger: () => ({
+    trace: vi.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    fatal: vi.fn(),
+  }),
+  logger: {
+    trace: vi.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    fatal: vi.fn(),
+  },
+}));
+
+export const KEEPER_SECRET = "test-keeper-secret";
+process.env["KEEPER_SECRET"] = KEEPER_SECRET;
+
+export async function makeApp(): Promise<Express> {
+  const { default: express } = await import("express");
+  const { default: cors } = await import("cors");
+  const { default: helmet } = await import("helmet");
+
+  const { default: authRouter } = await import("../modules/auth/auth.routes");
+  const { default: merchantRouter } =
+    await import("../modules/merchant/merchant.routes");
+  const { default: plansPublicRouter } =
+    await import("../modules/merchant/plans.public.routes");
+  const { default: subscriptionRouter } =
+    await import("../modules/subscription/subscription.routes");
+  const { default: keeperRouter } =
+    await import("../modules/webhook/keeper.routes");
+  const { errorHandler } = await import("../middleware/errors");
+  const { ok } = await import("../middleware/response");
+
+  const app = express();
+  app.use(helmet());
+  app.use(cors());
+  app.use(express.json());
+
+  app.get("/health", (_req, res) => ok(res, { status: "ok" }));
+  app.use("/auth", authRouter);
+  app.use("/merchant", merchantRouter);
+  app.use("/plans", plansPublicRouter);
+  app.use("/subscriber", subscriptionRouter);
+  app.use("/keeper", keeperRouter);
+  app.use(errorHandler);
+
+  return app;
+}
+
+const JWT_SECRET = "change-me-in-production";
+
+export function signJwt(
+  walletAddress: string,
+  role: "merchant" | "subscriber",
+): string {
+  return jwt.sign({ walletAddress, role }, JWT_SECRET, { expiresIn: "1h" });
+}
+
+export function keeperHeaders(): Record<string, string> {
+  return { "x-keeper-secret": KEEPER_SECRET };
+}

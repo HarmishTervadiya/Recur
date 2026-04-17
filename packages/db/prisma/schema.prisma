@@ -7,6 +7,29 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+/// Wallet-signature nonces for Ed25519 auth. One nonce per challenge/response
+/// cycle; marked used after JWT is issued.
+model AuthNonce {
+  id            String    @id @default(cuid())
+  walletAddress String    @map("wallet_address")
+  nonce         String    @unique
+  expiresAt     DateTime  @map("expires_at")
+  usedAt        DateTime? @map("used_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([walletAddress])
+  @@index([expiresAt])
+  @@map("auth_nonces")
+}
+
+// ---------------------------------------------------------------------------
+// Merchant hierarchy: Merchant → App → Plan
+// ---------------------------------------------------------------------------
+
 model Merchant {
   id            String   @id @default(cuid())
   walletAddress String   @unique @map("wallet_address")
@@ -14,5 +37,128 @@ model Merchant {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
+  apps App[]
+
   @@map("merchants")
+}
+
+/// A named product / project the merchant registers. Plans belong to an App.
+model App {
+  id          String   @id @default(cuid())
+  merchantId  String   @map("merchant_id")
+  name        String
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  plans    Plan[]
+
+  @@index([merchantId])
+  @@map("apps")
+}
+
+/// A billing plan within an App. Mirrors on-chain amount + interval and adds
+/// off-chain metadata (name, description, currency label).
+model Plan {
+  id              String   @id @default(cuid())
+  appId           String   @map("app_id")
+  name            String
+  description     String?
+  /// Amount in token base units (USDC 6 decimals: $1.00 = 1_000_000).
+  amountBaseUnits BigInt   @map("amount_base_units")
+  /// Billing interval in seconds, matching the on-chain u64 field.
+  intervalSeconds Int      @map("interval_seconds")
+  /// Token ticker / mint label. Informational — actual mint is on-chain.
+  currency        String   @default("USDC")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  app           App            @relation(fields: [appId], references: [id], onDelete: Cascade)
+  subscriptions Subscription[]
+
+  @@index([appId])
+  @@map("plans")
+}
+
+// ---------------------------------------------------------------------------
+// Subscriber
+// ---------------------------------------------------------------------------
+
+/// A wallet that has created at least one subscription. First-class model so
+/// per-subscriber history can be queried without joining Subscription rows.
+model Subscriber {
+  id            String   @id @default(cuid())
+  walletAddress String   @unique @map("wallet_address")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  subscriptions Subscription[]
+
+  @@map("subscribers")
+}
+
+// ---------------------------------------------------------------------------
+// Subscription — DB mirror of on-chain PDA state
+// ---------------------------------------------------------------------------
+
+/// Mirrors the on-chain Subscription PDA. Updated by the Keeper after each
+/// on-chain event. `subscriptionPda` is the canonical link to the on-chain
+/// account (seeds: subscription / subscriber / merchant).
+model Subscription {
+  id                String    @id @default(cuid())
+  planId            String    @map("plan_id")
+  subscriberId      String    @map("subscriber_id")
+  /// Base58-encoded on-chain PDA address.
+  subscriptionPda   String    @unique @map("subscription_pda")
+  lastPaymentAt     DateTime? @map("last_payment_at")
+  cancelRequestedAt DateTime? @map("cancel_requested_at")
+  isActive          Boolean   @default(true) @map("is_active")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  plan         Plan                  @relation(fields: [planId], references: [id])
+  subscriber   Subscriber            @relation(fields: [subscriberId], references: [id])
+  transactions MerchantTransaction[]
+
+  @@index([planId])
+  @@index([subscriberId])
+  @@map("subscriptions")
+}
+
+// ---------------------------------------------------------------------------
+// MerchantTransaction — one row per on-chain payment event for merchant apps
+//
+// NOTE: A separate InAppTransaction table will be added in a future phase to
+// track Recur's own platform subscription billing. That table is intentionally
+// kept separate from this one.
+// ---------------------------------------------------------------------------
+
+enum MerchantTransactionStatus {
+  success
+  failed
+}
+
+/// One row per `process_payment` on-chain event for a merchant-app subscription.
+/// Stores gross amount, fee split, and Solana tx signature for auditability.
+model MerchantTransaction {
+  id             String                    @id @default(cuid())
+  subscriptionId String                    @map("subscription_id")
+  /// Total amount debited from subscriber's token account (base units).
+  amountGross    BigInt                    @map("amount_gross")
+  /// Platform fee taken by Recur treasury (flat + bps).
+  platformFee    BigInt                    @map("platform_fee")
+  /// Net amount credited to merchant (amountGross − platformFee).
+  amountNet      BigInt                    @map("amount_net")
+  /// Base58 Solana transaction signature. Unique per confirmed payment.
+  txSignature    String                    @unique @map("tx_signature")
+  status         MerchantTransactionStatus
+  createdAt      DateTime                  @default(now()) @map("created_at")
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+
+  @@index([subscriptionId])
+  @@map("merchant_transactions")
 }

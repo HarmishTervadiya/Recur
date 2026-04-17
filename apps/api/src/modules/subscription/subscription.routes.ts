@@ -2,29 +2,29 @@ import { Router, type Router as ExpressRouter } from "express";
 import { z } from "zod";
 import { prisma } from "@recur/db";
 import { authenticate, requireSubscriber } from "../../middleware/auth.js";
-import { wrap, ApiError } from "../../middleware/errors.js";
+import { wrap, AppError } from "../../middleware/errors.js";
+import { ok } from "../../middleware/response.js";
+import { ErrorCode } from "../../errors.js";
 
 const router: ExpressRouter = Router();
 
 router.use(authenticate, requireSubscriber);
 
-// ---------------------------------------------------------------------------
-// GET /subscriber/me
-// ---------------------------------------------------------------------------
 router.get(
   "/me",
   wrap(async (req, res) => {
     const subscriber = await prisma.subscriber.findUnique({
       where: { walletAddress: req.user!.walletAddress },
     });
-    if (!subscriber) throw new ApiError(404, "Subscriber not found");
-    res.json(subscriber);
+    if (!subscriber)
+      throw new AppError(
+        ErrorCode.SUBSCRIBER_NOT_FOUND,
+        "Subscriber not found",
+      );
+    ok(res, subscriber);
   }),
 );
 
-// ---------------------------------------------------------------------------
-// GET /subscriber/subscriptions — list all subscriptions for this subscriber
-// ---------------------------------------------------------------------------
 router.get(
   "/subscriptions",
   wrap(async (req, res) => {
@@ -33,18 +33,13 @@ router.get(
       where: { subscriberId: subscriber.id },
       orderBy: { createdAt: "desc" },
       include: {
-        plan: {
-          include: { app: { include: { merchant: true } } },
-        },
+        plan: { include: { app: { include: { merchant: true } } } },
       },
     });
-    res.json(subs.map(serializeSubscription));
+    ok(res, subs.map(serializeSubscription));
   }),
 );
 
-// ---------------------------------------------------------------------------
-// GET /subscriber/subscriptions/:subId — single subscription detail
-// ---------------------------------------------------------------------------
 router.get(
   "/subscriptions/:subId",
   wrap(async (req, res) => {
@@ -56,15 +51,15 @@ router.get(
         transactions: { orderBy: { createdAt: "desc" }, take: 20 },
       },
     });
-    if (!sub) throw new ApiError(404, "Subscription not found");
-    res.json(serializeSubscription(sub));
+    if (!sub)
+      throw new AppError(
+        ErrorCode.SUBSCRIPTION_NOT_FOUND,
+        "Subscription not found",
+      );
+    ok(res, serializeSubscription(sub));
   }),
 );
 
-// ---------------------------------------------------------------------------
-// POST /subscriber/subscriptions — register a new subscription (DB only;
-// the on-chain transaction must already be confirmed before calling this).
-// ---------------------------------------------------------------------------
 const RegisterSubscriptionBody = z.object({
   planId: z.string().cuid(),
   subscriptionPda: z.string().min(32),
@@ -78,26 +73,19 @@ router.post(
     );
     const subscriber = await getSubscriber(req.user!.walletAddress);
 
-    // Verify plan exists and is active.
     const plan = await prisma.plan.findUnique({ where: { id: planId } });
-    if (!plan) throw new ApiError(404, "Plan not found");
-    if (!plan.isActive) throw new ApiError(400, "Plan is not active");
+    if (!plan) throw new AppError(ErrorCode.PLAN_NOT_FOUND, "Plan not found");
+    if (!plan.isActive)
+      throw new AppError(ErrorCode.PLAN_INACTIVE, "Plan is not active");
 
     const sub = await prisma.subscription.create({
-      data: {
-        planId,
-        subscriberId: subscriber.id,
-        subscriptionPda,
-      },
+      data: { planId, subscriberId: subscriber.id, subscriptionPda },
       include: { plan: true },
     });
-    res.status(201).json(serializeSubscription(sub));
+    ok(res, serializeSubscription(sub), 201);
   }),
 );
 
-// ---------------------------------------------------------------------------
-// GET /subscriber/subscriptions/:subId/transactions
-// ---------------------------------------------------------------------------
 router.get(
   "/subscriptions/:subId/transactions",
   wrap(async (req, res) => {
@@ -105,7 +93,11 @@ router.get(
     const sub = await prisma.subscription.findFirst({
       where: { id: req.params["subId"], subscriberId: subscriber.id },
     });
-    if (!sub) throw new ApiError(404, "Subscription not found");
+    if (!sub)
+      throw new AppError(
+        ErrorCode.SUBSCRIPTION_NOT_FOUND,
+        "Subscription not found",
+      );
 
     const page = Math.max(1, Number(req.query["page"] ?? 1));
     const limit = Math.min(100, Math.max(1, Number(req.query["limit"] ?? 20)));
@@ -116,17 +108,14 @@ router.get(
       skip: (page - 1) * limit,
       take: limit,
     });
-    res.json(transactions.map(serializeTx));
+    ok(res, transactions.map(serializeTx));
   }),
 );
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 async function getSubscriber(walletAddress: string) {
   const s = await prisma.subscriber.findUnique({ where: { walletAddress } });
-  if (!s) throw new ApiError(404, "Subscriber not found");
+  if (!s)
+    throw new AppError(ErrorCode.SUBSCRIBER_NOT_FOUND, "Subscriber not found");
   return s;
 }
 

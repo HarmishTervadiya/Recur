@@ -7,18 +7,9 @@ import {
 } from "express";
 import { z } from "zod";
 import { prisma } from "@recur/db";
-import { wrap, ApiError } from "../../middleware/errors.js";
-
-/**
- * Keeper ingest endpoint — receives payment events from the keeper process
- * after confirming on-chain transactions, and writes/updates the DB mirror.
- *
- * Authentication: shared secret in `X-Keeper-Secret` header.
- * The keeper and API share the KEEPER_SECRET env variable.
- *
- * NOTE: These endpoints are internal and should NOT be publicly reachable in
- * production (put behind VPC or nginx allow-list).
- */
+import { wrap, AppError } from "../../middleware/errors.js";
+import { ok, fail } from "../../middleware/response.js";
+import { ErrorCode } from "../../errors.js";
 
 const router: ExpressRouter = Router();
 
@@ -30,7 +21,7 @@ function verifyKeeperSecret(
   const secret = req.headers["x-keeper-secret"];
   const expected = process.env["KEEPER_SECRET"];
   if (!expected || secret !== expected) {
-    res.status(401).json({ error: "Unauthorized" });
+    fail(res, ErrorCode.UNAUTHORIZED, "Unauthorized");
     return;
   }
   next();
@@ -38,10 +29,6 @@ function verifyKeeperSecret(
 
 router.use(verifyKeeperSecret);
 
-// ---------------------------------------------------------------------------
-// POST /keeper/payment
-// Called by the keeper after successfully confirming a process_payment tx.
-// ---------------------------------------------------------------------------
 const PaymentEventBody = z.object({
   subscriptionPda: z.string().min(32),
   txSignature: z.string().min(32),
@@ -60,12 +47,11 @@ router.post(
       where: { subscriptionPda: body.subscriptionPda },
     });
     if (!subscription)
-      throw new ApiError(
-        404,
+      throw new AppError(
+        ErrorCode.SUBSCRIPTION_NOT_FOUND,
         `Subscription not found for PDA ${body.subscriptionPda}`,
       );
 
-    // Upsert the transaction (idempotent — re-delivery of same signature is safe).
     const tx = await prisma.merchantTransaction.upsert({
       where: { txSignature: body.txSignature },
       update: {},
@@ -79,7 +65,6 @@ router.post(
       },
     });
 
-    // Mirror on-chain state: update lastPaymentAt.
     await prisma.subscription.update({
       where: { id: subscription.id },
       data: {
@@ -89,14 +74,10 @@ router.post(
       },
     });
 
-    res.status(201).json({ id: tx.id });
+    ok(res, { id: tx.id }, 201);
   }),
 );
 
-// ---------------------------------------------------------------------------
-// POST /keeper/payment-failed
-// Called by the keeper when process_payment fails (e.g. insufficient balance).
-// ---------------------------------------------------------------------------
 const PaymentFailedBody = z.object({
   subscriptionPda: z.string().min(32),
   txSignature: z.string().min(32),
@@ -114,8 +95,8 @@ router.post(
       where: { subscriptionPda: body.subscriptionPda },
     });
     if (!subscription)
-      throw new ApiError(
-        404,
+      throw new AppError(
+        ErrorCode.SUBSCRIPTION_NOT_FOUND,
         `Subscription not found for PDA ${body.subscriptionPda}`,
       );
 
@@ -132,14 +113,10 @@ router.post(
       },
     });
 
-    res.status(201).json({ id: tx.id });
+    ok(res, { id: tx.id }, 201);
   }),
 );
 
-// ---------------------------------------------------------------------------
-// POST /keeper/cancel
-// Called by the keeper after request_cancel or force_cancel is confirmed.
-// ---------------------------------------------------------------------------
 const CancelEventBody = z.object({
   subscriptionPda: z.string().min(32),
   cancelType: z.enum(["request", "force", "finalize"]),
@@ -155,8 +132,8 @@ router.post(
       where: { subscriptionPda: body.subscriptionPda },
     });
     if (!subscription)
-      throw new ApiError(
-        404,
+      throw new AppError(
+        ErrorCode.SUBSCRIPTION_NOT_FOUND,
         `Subscription not found for PDA ${body.subscriptionPda}`,
       );
 
@@ -174,15 +151,10 @@ router.post(
       },
     });
 
-    res.status(200).json({ ok: true });
+    ok(res, { ok: true });
   }),
 );
 
-// ---------------------------------------------------------------------------
-// POST /keeper/subscription
-// Called by the keeper after initialize_subscription is confirmed on-chain.
-// Upserts the subscription DB record (PDA is the canonical key).
-// ---------------------------------------------------------------------------
 const SubscriptionCreatedBody = z.object({
   subscriptionPda: z.string().min(32),
   planId: z.string().cuid(),
@@ -195,18 +167,15 @@ router.post(
   wrap(async (req, res) => {
     const body = SubscriptionCreatedBody.parse(req.body);
 
-    // Upsert subscriber.
     const subscriber = await prisma.subscriber.upsert({
       where: { walletAddress: body.subscriberWallet },
       update: {},
       create: { walletAddress: body.subscriberWallet },
     });
 
-    // Verify plan exists.
     const plan = await prisma.plan.findUnique({ where: { id: body.planId } });
-    if (!plan) throw new ApiError(404, "Plan not found");
+    if (!plan) throw new AppError(ErrorCode.PLAN_NOT_FOUND, "Plan not found");
 
-    // Upsert subscription.
     const subscription = await prisma.subscription.upsert({
       where: { subscriptionPda: body.subscriptionPda },
       update: { isActive: true },
@@ -218,7 +187,7 @@ router.post(
       },
     });
 
-    res.status(201).json({ id: subscription.id });
+    ok(res, { id: subscription.id }, 201);
   }),
 );
 

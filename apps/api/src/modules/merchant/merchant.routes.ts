@@ -2,16 +2,14 @@ import { Router, type Router as ExpressRouter } from "express";
 import { z } from "zod";
 import { prisma } from "@recur/db";
 import { authenticate, requireMerchant } from "../../middleware/auth.js";
-import { wrap, ApiError } from "../../middleware/errors.js";
+import { wrap, AppError } from "../../middleware/errors.js";
+import { ok } from "../../middleware/response.js";
+import { ErrorCode } from "../../errors.js";
 
 const router: ExpressRouter = Router();
 
-// All merchant routes require authentication + merchant role.
 router.use(authenticate, requireMerchant);
 
-// ---------------------------------------------------------------------------
-// GET /merchant/me — fetch own merchant profile
-// ---------------------------------------------------------------------------
 router.get(
   "/me",
   wrap(async (req, res) => {
@@ -19,14 +17,12 @@ router.get(
       where: { walletAddress: req.user!.walletAddress },
       include: { apps: { orderBy: { createdAt: "desc" } } },
     });
-    if (!merchant) throw new ApiError(404, "Merchant not found");
-    res.json(merchant);
+    if (!merchant)
+      throw new AppError(ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");
+    ok(res, merchant);
   }),
 );
 
-// ---------------------------------------------------------------------------
-// PATCH /merchant/me — update merchant profile (name)
-// ---------------------------------------------------------------------------
 const UpdateMerchantBody = z.object({
   name: z.string().min(1).max(100),
 });
@@ -39,15 +35,10 @@ router.patch(
       where: { walletAddress: req.user!.walletAddress },
       data: { name },
     });
-    res.json(merchant);
+    ok(res, merchant);
   }),
 );
 
-// ---------------------------------------------------------------------------
-// Apps  — /merchant/apps
-// ---------------------------------------------------------------------------
-
-// GET /merchant/apps
 router.get(
   "/apps",
   wrap(async (req, res) => {
@@ -57,11 +48,10 @@ router.get(
       orderBy: { createdAt: "desc" },
       include: { plans: { where: { isActive: true } } },
     });
-    res.json(apps);
+    ok(res, apps);
   }),
 );
 
-// POST /merchant/apps
 const CreateAppBody = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
@@ -75,11 +65,10 @@ router.post(
     const app = await prisma.app.create({
       data: { merchantId: merchant.id, name, description },
     });
-    res.status(201).json(app);
+    ok(res, app, 201);
   }),
 );
 
-// GET /merchant/apps/:appId
 router.get(
   "/apps/:appId",
   wrap(async (req, res) => {
@@ -87,11 +76,10 @@ router.get(
       req.user!.walletAddress,
       req.params["appId"]!,
     );
-    res.json(app);
+    ok(res, app);
   }),
 );
 
-// PATCH /merchant/apps/:appId
 const UpdateAppBody = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional(),
@@ -107,11 +95,10 @@ router.patch(
       where: { id: req.params["appId"] },
       data,
     });
-    res.json(app);
+    ok(res, app);
   }),
 );
 
-// DELETE /merchant/apps/:appId — soft-delete by setting isActive = false
 router.delete(
   "/apps/:appId",
   wrap(async (req, res) => {
@@ -124,11 +111,6 @@ router.delete(
   }),
 );
 
-// ---------------------------------------------------------------------------
-// Plans  — /merchant/apps/:appId/plans
-// ---------------------------------------------------------------------------
-
-// GET /merchant/apps/:appId/plans
 router.get(
   "/apps/:appId/plans",
   wrap(async (req, res) => {
@@ -137,11 +119,10 @@ router.get(
       where: { appId: req.params["appId"] },
       orderBy: { createdAt: "desc" },
     });
-    res.json(plans);
+    ok(res, plans.map(serializePlan));
   }),
 );
 
-// POST /merchant/apps/:appId/plans
 const CreatePlanBody = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
@@ -167,11 +148,10 @@ router.post(
         currency: body.currency,
       },
     });
-    res.status(201).json(serializePlan(plan));
+    ok(res, serializePlan(plan), 201);
   }),
 );
 
-// GET /merchant/apps/:appId/plans/:planId
 router.get(
   "/apps/:appId/plans/:planId",
   wrap(async (req, res) => {
@@ -179,12 +159,11 @@ router.get(
     const plan = await prisma.plan.findFirst({
       where: { id: req.params["planId"], appId: req.params["appId"] },
     });
-    if (!plan) throw new ApiError(404, "Plan not found");
-    res.json(serializePlan(plan));
+    if (!plan) throw new AppError(ErrorCode.PLAN_NOT_FOUND, "Plan not found");
+    ok(res, serializePlan(plan));
   }),
 );
 
-// PATCH /merchant/apps/:appId/plans/:planId
 const UpdatePlanBody = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional(),
@@ -200,13 +179,9 @@ router.patch(
       where: { id: req.params["planId"] },
       data,
     });
-    res.json(serializePlan(plan));
+    ok(res, serializePlan(plan));
   }),
 );
-
-// ---------------------------------------------------------------------------
-// Transactions — /merchant/apps/:appId/transactions
-// ---------------------------------------------------------------------------
 
 router.get(
   "/apps/:appId/transactions",
@@ -217,31 +192,22 @@ router.get(
     const limit = Math.min(100, Math.max(1, Number(req.query["limit"] ?? 20)));
 
     const transactions = await prisma.merchantTransaction.findMany({
-      where: {
-        subscription: { plan: { appId: req.params["appId"] } },
-      },
+      where: { subscription: { plan: { appId: req.params["appId"] } } },
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * limit,
       take: limit,
-      include: {
-        subscription: {
-          include: { plan: true },
-        },
-      },
+      include: { subscription: { include: { plan: true } } },
     });
-    res.json(transactions.map(serializeTransaction));
+    ok(res, transactions.map(serializeTransaction));
   }),
 );
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 async function getMerchant(walletAddress: string) {
   const merchant = await prisma.merchant.findUnique({
     where: { walletAddress },
   });
-  if (!merchant) throw new ApiError(404, "Merchant not found");
+  if (!merchant)
+    throw new AppError(ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");
   return merchant;
 }
 
@@ -251,7 +217,7 @@ async function getOwnedApp(walletAddress: string, appId: string) {
     where: { id: appId, merchantId: merchant.id },
     include: { plans: false },
   });
-  if (!app) throw new ApiError(404, "App not found");
+  if (!app) throw new AppError(ErrorCode.APP_NOT_FOUND, "App not found");
   return app;
 }
 

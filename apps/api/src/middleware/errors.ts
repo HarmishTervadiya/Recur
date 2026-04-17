@@ -1,46 +1,45 @@
 import type { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
+import { createLogger } from "@recur/logger";
+import { type ErrorCode, ErrorCode as EC } from "../errors.js";
+import { fail } from "./response.js";
 
-/** Centralised error handler — must be the last middleware registered. */
+const log = createLogger("api:error");
+
+export class AppError extends Error {
+  constructor(
+    public readonly code: ErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "AppError";
+  }
+}
+
 export function errorHandler(
   err: unknown,
   _req: Request,
   res: Response,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _next: NextFunction,
 ): void {
   if (err instanceof ZodError) {
-    res.status(400).json({
-      error: "Validation error",
-      details: err.issues.map((issue) => ({
-        path: issue.path.join("."),
-        message: issue.message,
-      })),
-    });
+    const details = err.issues.map((i) => ({
+      path: i.path.join("."),
+      message: i.message,
+    }));
+    fail(res, EC.VALIDATION_ERROR, "Validation error", details);
     return;
   }
 
-  if (err instanceof ApiError) {
-    res.status(err.statusCode).json({ error: err.message });
+  if (err instanceof AppError) {
+    fail(res, err.code, err.message);
     return;
   }
 
-  console.error("[unhandled error]", err);
-  res.status(500).json({ error: "Internal server error" });
+  log.error({ err }, "Unhandled error");
+  fail(res, EC.INTERNAL_ERROR, "Internal server error");
 }
 
-/** Typed HTTP error for throwing from route handlers. */
-export class ApiError extends Error {
-  constructor(
-    public readonly statusCode: number,
-    message: string,
-  ) {
-    super(message);
-    this.name = "ApiError";
-  }
-}
-
-/** Wrap an async route handler so errors are forwarded to errorHandler. */
 export function wrap(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
 ) {

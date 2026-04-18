@@ -7,10 +7,12 @@ import {
 } from "express";
 import { z } from "zod";
 import { prisma } from "@recur/db";
+import { createLogger } from "@recur/logger";
 import { wrap, AppError } from "../../middleware/errors.js";
 import { ok, fail } from "../../middleware/response.js";
 import { ErrorCode } from "../../errors.js";
 
+const logger = createLogger("keeper-api");
 const router: ExpressRouter = Router();
 
 function verifyKeeperSecret(
@@ -74,6 +76,17 @@ router.post(
       },
     });
 
+    logger.info(
+      {
+        pda: body.subscriptionPda,
+        tx: body.txSignature,
+        gross: body.amountGross,
+        fee: body.platformFee,
+        net: body.amountNet,
+      },
+      "Payment recorded",
+    );
+
     ok(res, { id: tx.id }, 201);
   }),
 );
@@ -113,6 +126,8 @@ router.post(
       },
     });
 
+    logger.warn({ pda: body.subscriptionPda, tx: body.txSignature }, "Payment FAILED recorded");
+
     ok(res, { id: tx.id }, 201);
   }),
 );
@@ -150,6 +165,11 @@ router.post(
         isActive: !isFinalized,
       },
     });
+
+    logger.info(
+      { pda: body.subscriptionPda, type: body.cancelType, isActive: !isFinalized },
+      "Cancel event recorded",
+    );
 
     ok(res, { ok: true });
   }),

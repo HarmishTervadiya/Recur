@@ -232,14 +232,25 @@ function serializeTransaction(tx: {
   amountGross: bigint;
   platformFee: bigint;
   amountNet: bigint;
+  subscription?: { plan?: { amountBaseUnits?: bigint; [k: string]: unknown }; [k: string]: unknown };
   [key: string]: unknown;
 }) {
-  return {
+  const result: Record<string, unknown> = {
     ...tx,
     amountGross: tx.amountGross.toString(),
     platformFee: tx.platformFee.toString(),
     amountNet: tx.amountNet.toString(),
   };
+  if (tx.subscription?.plan) {
+    result["subscription"] = {
+      ...tx.subscription,
+      plan: {
+        ...tx.subscription.plan,
+        amountBaseUnits: tx.subscription.plan.amountBaseUnits?.toString(),
+      },
+    };
+  }
+  return result;
 }
 
 export default router;

@@ -1,16 +1,42 @@
 import { PublicKey } from "@solana/web3.js";
 
-export const SUBSCRIPTION_SEED = Buffer.from("subscription");
+export const PROGRAM_ID = new PublicKey(
+  "Du86TLvDNSzGf1hkb6cVPoQpHPCwYiRXnGKm3J1GAgFj",
+);
 
-export const USDC_MINT_DEVNET = new PublicKey("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
+export const USDC_MINT_DEVNET = new PublicKey(
+  "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+);
 
 export function findSubscriptionPda(
-  merchant: PublicKey,
   subscriber: PublicKey,
-  programId: PublicKey
+  merchant: PublicKey,
+  programId: PublicKey = PROGRAM_ID,
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [SUBSCRIPTION_SEED, merchant.toBuffer(), subscriber.toBuffer()],
-    programId
+    [Buffer.from("subscription"), subscriber.toBuffer(), merchant.toBuffer()],
+    programId,
+  );
+}
+
+export function findTreasuryVaultPda(
+  programId: PublicKey = PROGRAM_ID,
+): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("treasury_vault")],
+    programId,
+  );
+}
+
+export function findWithdrawalProposalPda(
+  proposer: PublicKey,
+  nonce: bigint,
+  programId: PublicKey = PROGRAM_ID,
+): [PublicKey, number] {
+  const nonceBytes = Buffer.alloc(8);
+  nonceBytes.writeBigUInt64LE(nonce);
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("withdrawal_proposal"), proposer.toBuffer(), nonceBytes],
+    programId,
   );
 }

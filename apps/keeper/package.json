@@ -6,6 +6,7 @@
     "build": "tsc",
     "dev": "bun run --watch src/index.ts",
     "start": "bun run src/index.ts",
+    "seed:localnet": "bun scripts/seed-localnet.ts",
     "lint": "echo lint:keeper"
   },
   "dependencies": {
@@ -13,11 +14,15 @@
     "@recur/db": "*",
     "@recur/logger": "*",
     "@recur/solana-client": "*",
-    "@recur/types": "*",
-    "@solana/web3.js": "^1.91.0"
+    "@coral-xyz/anchor": "^0.30.1",
+    "@solana/spl-token": "^0.4.6",
+    "@solana/web3.js": "^1.91.0",
+    "bs58": "^5.0.0",
+    "node-cron": "^3.0.3"
   },
   "devDependencies": {
     "@types/node": "^20.12.0",
+    "@types/node-cron": "^3.0.11",
     "typescript": "^5.4.0"
   }
 }

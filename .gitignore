@@ -17,6 +17,8 @@ Thumbs.db
 packages/db/prisma/migrations/
 contracts/target/
 contracts/.anchor/
+contracts/test-ledger/
+test-ledger/
 **/*.so
 *.log
 coverage/

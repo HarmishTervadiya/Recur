@@ -16,7 +16,10 @@
     "db:generate": "bun run --filter=@recur/db generate",
     "db:push": "bun run --filter=@recur/db db:push",
     "db:migrate": "bun run --filter=@recur/db migrate",
-    "seed:localnet": "bun run --filter=@recur/keeper seed:localnet"
+    "seed:localnet": "bun run --filter=@recur/keeper seed:localnet",
+    "demo:seed": "bun run scripts/demo-seed.ts",
+    "demo:show": "bun run scripts/demo-show.ts",
+    "demo:watch": "bun run scripts/watch-balances.ts"
   },
   "devDependencies": {
     "@solana/spl-token": "^0.4.14",

@@ -33,7 +33,14 @@ vi.mock("@recur/logger", () => ({
   },
 }));
 
+// Set test env vars before config is imported
+export const TEST_JWT_SECRET = "test-jwt-secret-at-least-16-chars";
+export const TEST_JWT_REFRESH_SECRET = "test-refresh-secret-16-chars-ok";
 export const KEEPER_SECRET = "test-keeper-secret";
+
+process.env["NODE_ENV"] = "test";
+process.env["JWT_SECRET"] = TEST_JWT_SECRET;
+process.env["JWT_REFRESH_SECRET"] = TEST_JWT_REFRESH_SECRET;
 process.env["KEEPER_SECRET"] = KEEPER_SECRET;
 
 export async function makeApp(): Promise<Express> {
@@ -69,13 +76,11 @@ export async function makeApp(): Promise<Express> {
   return app;
 }
 
-const JWT_SECRET = "change-me-in-production";
-
 export function signJwt(
   walletAddress: string,
   role: "merchant" | "subscriber",
 ): string {
-  return jwt.sign({ walletAddress, role }, JWT_SECRET, { expiresIn: "1h" });
+  return jwt.sign({ walletAddress, role }, TEST_JWT_SECRET, { expiresIn: "1h" });
 }
 
 export function keeperHeaders(): Record<string, string> {

@@ -12,11 +12,13 @@ import { reportCancelResult } from "../lib/reporter.js";
 
 const logger = createLogger("forceCancel");
 
+const BATCH_SIZE = parseInt(process.env["KEEPER_BATCH_SIZE"] ?? "100", 10);
+
 export async function forceCancel(): Promise<void> {
   const subs = await prisma.subscription.findMany({
-    where: { isActive: true },
+    where: { status: "active" },
     include: { plan: true },
-    take: 100,
+    take: BATCH_SIZE,
   });
 
   const keeper = keeperKeypair.publicKey;

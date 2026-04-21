@@ -1,10 +1,9 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { env } from "@recur/config";
 import type { AuthPayload } from "../types.js";
 import { ErrorCode } from "../errors.js";
 import { fail } from "./response.js";
-
-const JWT_SECRET = process.env["JWT_SECRET"] ?? "change-me-in-production";
 
 export function authenticate(
   req: Request,
@@ -22,7 +21,7 @@ export function authenticate(
   }
   const token = header.slice(7);
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as AuthPayload;
+    const payload = jwt.verify(token, env.JWT_SECRET) as AuthPayload;
     req.user = payload;
     next();
   } catch {

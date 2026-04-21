@@ -10,6 +10,7 @@ import subscriptionRouter from "./modules/subscription/subscription.routes.js";
 import keeperRouter from "./modules/webhook/keeper.routes.js";
 import { errorHandler } from "./middleware/errors.js";
 import { ok } from "./middleware/response.js";
+import { authLimiter, apiLimiter } from "./middleware/rateLimit.js";
 
 const log = createLogger("api");
 const app: Express = express();
@@ -19,11 +20,15 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
+// Apply general rate limit to all routes
+app.use(apiLimiter);
+
 app.get("/health", (_req, res) => {
   ok(res, { status: "ok", timestamp: new Date().toISOString() });
 });
 
-app.use("/auth", authRouter);
+// Auth routes get stricter rate limiting
+app.use("/auth", authLimiter, authRouter);
 app.use("/merchant", merchantRouter);
 app.use("/plans", plansPublicRouter);
 app.use("/subscriber", subscriptionRouter);

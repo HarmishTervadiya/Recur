@@ -35,15 +35,18 @@ pub mod recur {
 
     /// Create a new Subscription PDA.
     ///
-    /// Both subscriber and merchant must sign — subscriber to prove consent,
-    /// merchant to pay the ~0.002 SOL rent.
+    /// Only the subscriber signs — proving consent and paying the ~0.002 SOL
+    /// rent. The merchant is passed as an unchecked `AccountInfo` so the SDK
+    /// can create subscriptions without the merchant wallet being present.
     ///
-    /// The subscriber must have already called `spl_token::approve` delegating
-    /// `amount` tokens to the Subscription PDA before invoking this.
+    /// `plan_seed` is an arbitrary 8-byte value (typically derived from the
+    /// off-chain Plan ID) that disambiguates multiple subscriptions between
+    /// the same subscriber–merchant pair.
     pub fn initialize_subscription(
         ctx: Context<InitializeSubscription>,
         amount: u64,
         interval: u64,
+        plan_seed: [u8; 8],
     ) -> Result<()> {
         require!(
             amount >= MIN_PLAN_AMOUNT_BASE_UNITS,
@@ -56,6 +59,7 @@ pub mod recur {
 
         sub.subscriber = ctx.accounts.subscriber.key();
         sub.merchant = ctx.accounts.merchant.key();
+        sub.plan_seed = plan_seed;
         sub.amount = amount;
         sub.interval = interval;
         sub.last_payment_timestamp = now; // first pull available after `interval` seconds
@@ -108,6 +112,7 @@ pub mod recur {
             b"subscription",
             ctx.accounts.subscriber.key.as_ref(),
             ctx.accounts.merchant.key.as_ref(),
+            &ctx.accounts.subscription.plan_seed,
             &[ctx.accounts.subscription.bump],
         ]];
 
@@ -189,7 +194,7 @@ pub mod recur {
     ///   1. `cancel_requested_at > 0`
     ///   2. `now >= last_payment_timestamp + interval`
     ///
-    /// Rent returns to the merchant Gas Tank.
+    /// Rent returns to the subscriber (who paid rent at creation).
     pub fn finalize_cancel(ctx: Context<FinalizeCancel>) -> Result<()> {
         let sub = &ctx.accounts.subscription;
         let now = Clock::get()?.unix_timestamp as u64;
@@ -200,7 +205,7 @@ pub mod recur {
             RecurError::PaidPeriodNotElapsed
         );
 
-        Ok(()) // Anchor `close = merchant` handles lamport transfer + zero-out.
+        Ok(()) // Anchor `close = subscriber` handles lamport transfer + zero-out.
     }
 
     /// Immediately close a Subscription PDA when the delegation is revoked or
@@ -357,23 +362,24 @@ pub mod recur {
 // ---------------------------------------------------------------------------
 
 #[derive(Accounts)]
+#[instruction(amount: u64, interval: u64, plan_seed: [u8; 8])]
 pub struct InitializeSubscription<'info> {
     #[account(
         init,
-        payer = merchant,
+        payer = subscriber,
         space = 8 + Subscription::INIT_SPACE,
-        seeds = [b"subscription", subscriber.key().as_ref(), merchant.key().as_ref()],
+        seeds = [b"subscription", subscriber.key().as_ref(), merchant.key().as_ref(), &plan_seed],
         bump
     )]
     pub subscription: Account<'info, Subscription>,
 
-    /// Subscriber must sign to prove consent to the recurring charge.
+    /// Subscriber signs to prove consent and pays the PDA rent (~0.002 SOL).
     #[account(mut)]
     pub subscriber: Signer<'info>,
 
-    /// Merchant pays the PDA rent (~0.002 SOL).
-    #[account(mut)]
-    pub merchant: Signer<'info>,
+    /// CHECK: Merchant wallet. Verified off-chain via the Plan's merchant field.
+    /// Not required to sign so the SDK can create subscriptions client-side.
+    pub merchant: AccountInfo<'info>,
 
     pub system_program: Program<'info, System>,
 }
@@ -382,7 +388,7 @@ pub struct InitializeSubscription<'info> {
 pub struct ProcessPayment<'info> {
     #[account(
         mut,
-        seeds = [b"subscription", subscriber.key().as_ref(), merchant.key().as_ref()],
+        seeds = [b"subscription", subscriber.key().as_ref(), merchant.key().as_ref(), &subscription.plan_seed],
         bump = subscription.bump,
         has_one = subscriber,
         has_one = merchant,
@@ -451,7 +457,7 @@ pub struct ProcessPayment<'info> {
 pub struct RequestCancel<'info> {
     #[account(
         mut,
-        seeds = [b"subscription", subscriber.key().as_ref(), merchant.key().as_ref()],
+        seeds = [b"subscription", subscriber.key().as_ref(), merchant.key().as_ref(), &subscription.plan_seed],
         bump = subscription.bump,
         has_one = subscriber,
         has_one = merchant,
@@ -472,20 +478,20 @@ pub struct RequestCancel<'info> {
 pub struct FinalizeCancel<'info> {
     #[account(
         mut,
-        close = merchant,
-        seeds = [b"subscription", subscriber.key().as_ref(), merchant.key().as_ref()],
+        close = subscriber,
+        seeds = [b"subscription", subscriber.key().as_ref(), merchant.key().as_ref(), &subscription.plan_seed],
         bump = subscription.bump,
         has_one = subscriber,
         has_one = merchant,
     )]
     pub subscription: Account<'info, Subscription>,
 
-    /// CHECK: Identity enforced by `has_one`.
+    /// Rent refund destination (subscriber paid rent). Identity enforced by `has_one`.
+    #[account(mut)]
+    /// CHECK: Verified by `has_one = subscriber`.
     pub subscriber: AccountInfo<'info>,
 
-    /// Rent refund destination (merchant Gas Tank). Identity enforced by `has_one`.
-    #[account(mut)]
-    /// CHECK: Verified by `has_one = merchant`.
+    /// CHECK: Identity enforced by `has_one`.
     pub merchant: AccountInfo<'info>,
 }
 
@@ -493,20 +499,20 @@ pub struct FinalizeCancel<'info> {
 pub struct ForceCancel<'info> {
     #[account(
         mut,
-        close = merchant,
-        seeds = [b"subscription", subscriber.key().as_ref(), merchant.key().as_ref()],
+        close = subscriber,
+        seeds = [b"subscription", subscriber.key().as_ref(), merchant.key().as_ref(), &subscription.plan_seed],
         bump = subscription.bump,
         has_one = subscriber,
         has_one = merchant,
     )]
     pub subscription: Account<'info, Subscription>,
 
-    /// CHECK: Identity enforced by `has_one`.
+    /// Rent refund destination (subscriber paid rent). Identity enforced by `has_one`.
+    #[account(mut)]
+    /// CHECK: Verified by `has_one = subscriber`.
     pub subscriber: AccountInfo<'info>,
 
-    /// Rent refund destination. Identity enforced by `has_one`.
-    #[account(mut)]
-    /// CHECK: Verified by `has_one = merchant`.
+    /// CHECK: Identity enforced by `has_one`.
     pub merchant: AccountInfo<'info>,
 
     /// Only the registered Keeper may force-cancel.
@@ -682,6 +688,7 @@ pub struct CleanupExpiredProposal<'info> {
 pub struct Subscription {
     pub subscriber: Pubkey,          // wallet paying
     pub merchant: Pubkey,            // wallet receiving
+    pub plan_seed: [u8; 8],          // disambiguates multiple subs per subscriber-merchant pair
     pub amount: u64,                 // token base units per interval
     pub interval: u64,               // seconds between pulls (e.g. 2_592_000 = 30 days)
     pub last_payment_timestamp: u64, // unix ts of last successful pull

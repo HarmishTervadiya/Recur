@@ -12,6 +12,7 @@ const logger = createLogger("chainVerify");
 export interface OnChainSubscription {
   subscriber: PublicKey;
   merchant: PublicKey;
+  planSeed: Buffer;
   amount: bigint;
   interval: bigint;
   lastPaymentTimestamp: bigint;
@@ -41,12 +42,13 @@ export async function fetchSubscription(
     return {
       subscriber: readPubkey(d, o),
       merchant: readPubkey(d, o + 32),
-      amount: readU64(d, o + 64),
-      interval: readU64(d, o + 72),
-      lastPaymentTimestamp: readU64(d, o + 80),
-      createdAt: readU64(d, o + 88),
-      cancelRequestedAt: readU64(d, o + 96),
-      bump: d.readUInt8(o + 104),
+      planSeed: Buffer.from(d.subarray(o + 64, o + 72)),
+      amount: readU64(d, o + 72),
+      interval: readU64(d, o + 80),
+      lastPaymentTimestamp: readU64(d, o + 88),
+      createdAt: readU64(d, o + 96),
+      cancelRequestedAt: readU64(d, o + 104),
+      bump: d.readUInt8(o + 112),
     };
   } catch (err) {
     logger.error(

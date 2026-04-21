@@ -16,6 +16,8 @@ import {
 
 const logger = createLogger("processPayments");
 
+const BATCH_SIZE = parseInt(process.env["KEEPER_BATCH_SIZE"] ?? "50", 10);
+
 const PLATFORM_FLAT_FEE = 50_000n;
 const PLATFORM_BPS = 25n;
 const BPS_DENOMINATOR = 10_000n;
@@ -31,20 +33,24 @@ function computeFee(amount: bigint): {
 }
 
 export async function processPayments(): Promise<void> {
+  // Use nextPaymentDue for efficient query instead of computing interval
   const subs = await prisma.subscription.findMany({
-    where: { isActive: true, cancelRequestedAt: null },
-    include: { plan: true },
-    take: 50,
+    where: {
+      status: "active",
+      cancelRequestedAt: null,
+      nextPaymentDue: { lte: new Date() },
+    },
+    include: { plan: true, subscriber: true },
+    take: BATCH_SIZE,
+    orderBy: { nextPaymentDue: "asc" },
   });
 
-  const now = Date.now();
+  if (subs.length === 0) return;
+
+  logger.info({ count: subs.length }, "Processing due payments");
   const keeper = keeperKeypair.publicKey;
 
   for (const sub of subs) {
-    const lastPayment = sub.lastPaymentAt?.getTime() ?? sub.createdAt.getTime();
-    const intervalMs = sub.plan.intervalSeconds * 1000;
-    if (now < lastPayment + intervalMs) continue;
-
     const pda = new PublicKey(sub.subscriptionPda);
     const onchain = await fetchSubscription(pda);
 
@@ -90,6 +96,8 @@ export async function processPayments(): Promise<void> {
         amountGross: gross.toString(),
         platformFee: fee.toString(),
         amountNet: net.toString(),
+        fromWallet: sub.subscriber.walletAddress,
+        toWallet: sub.plan.appId, // resolved to merchant wallet by API
         confirmedAt: new Date().toISOString(),
       });
 

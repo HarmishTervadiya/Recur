@@ -12,11 +12,16 @@ import { reportCancelResult } from "../lib/reporter.js";
 
 const logger = createLogger("finalizeCancel");
 
+const BATCH_SIZE = parseInt(process.env["KEEPER_BATCH_SIZE"] ?? "50", 10);
+
 export async function finalizeCancel(): Promise<void> {
   const subs = await prisma.subscription.findMany({
-    where: { isActive: true, cancelRequestedAt: { not: null } },
+    where: {
+      status: "active",
+      cancelRequestedAt: { not: null },
+    },
     include: { plan: true },
-    take: 50,
+    take: BATCH_SIZE,
   });
 
   const now = Date.now();

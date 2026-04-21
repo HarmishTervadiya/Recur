@@ -37,6 +37,8 @@ export async function reportPaymentResult(data: {
   amountGross: string;
   platformFee: string;
   amountNet: string;
+  fromWallet?: string;
+  toWallet?: string;
   confirmedAt: string;
 }): Promise<void> {
   await post("/payment", data);
@@ -58,4 +60,13 @@ export async function reportCancelResult(data: {
   confirmedAt: string;
 }): Promise<void> {
   await post("/cancel", data);
+}
+
+export async function reportSubscriptionCreated(data: {
+  subscriptionPda: string;
+  planId: string;
+  subscriberWallet: string;
+  confirmedAt: string;
+}): Promise<void> {
+  await post("/subscription", data);
 }

@@ -48,6 +48,9 @@ const RPC_URL = "http://127.0.0.1:8899";
 const API_URL = "http://localhost:3001";
 const PROGRAM_ID = new PublicKey("Du86TLvDNSzGf1hkb6cVPoQpHPCwYiRXnGKm3J1GAgFj");
 
+const DEFAULT_PLAN_SEED = Buffer.alloc(8);
+DEFAULT_PLAN_SEED.writeBigUInt64LE(BigInt(1));
+
 const AMOUNT = 10_000_000n;  // $10.00 USDC
 const INTERVAL = 15;          // 15 seconds
 const conn = new Connection(RPC_URL, "confirmed");
@@ -250,7 +253,7 @@ async function main() {
   // ── 6. Init subscription on-chain ──────────────────────────────────────
   console.log("[demo-show] Initializing subscription on-chain...");
   const [subPda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("subscription"), subscriberKp.publicKey.toBuffer(), merchantKp.publicKey.toBuffer()],
+    [Buffer.from("subscription"), subscriberKp.publicKey.toBuffer(), merchantKp.publicKey.toBuffer(), DEFAULT_PLAN_SEED],
     PROGRAM_ID,
   );
 
@@ -266,12 +269,12 @@ async function main() {
     keys: [
       { pubkey: subPda, isSigner: false, isWritable: true },
       { pubkey: subscriberKp.publicKey, isSigner: true, isWritable: true },
-      { pubkey: merchantKp.publicKey, isSigner: true, isWritable: true },
+      { pubkey: merchantKp.publicKey, isSigner: false, isWritable: false },
       { pubkey: new PublicKey("11111111111111111111111111111111"), isSigner: false, isWritable: false },
     ],
-    data: Buffer.concat([sha256Disc("initialize_subscription"), amtBuf, intBuf]),
+    data: Buffer.concat([sha256Disc("initialize_subscription"), amtBuf, intBuf, DEFAULT_PLAN_SEED]),
   });
-  await send(new Transaction().add(initIx), [subscriberKp, merchantKp]);
+  await send(new Transaction().add(initIx), [subscriberKp]);
   console.log(`[demo-show] Subscription PDA: ${subPda.toBase58()}`);
 
   // ── 7. Register subscription in DB ─────────────────────────────────────

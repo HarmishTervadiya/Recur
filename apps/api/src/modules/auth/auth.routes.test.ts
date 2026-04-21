@@ -118,6 +118,7 @@ describe("POST /auth/verify", () => {
       createdAt: NOW,
       updatedAt: NOW,
     });
+    prismaMock.refreshToken.create.mockResolvedValue({} as any);
 
     const res = await request(app)
       .post("/auth/verify")
@@ -125,8 +126,9 @@ describe("POST /auth/verify", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    expect(res.body.data).toHaveProperty("token");
-    expect(res.body.data.token.split(".")).toHaveLength(3);
+    expect(res.body.data).toHaveProperty("accessToken");
+    expect(res.body.data).toHaveProperty("refreshToken");
+    expect(res.body.data.accessToken.split(".")).toHaveLength(3);
   });
 
   it("returns 401 for wrong signature", async () => {
@@ -223,6 +225,7 @@ describe("POST /auth/verify", () => {
       createdAt: NOW,
       updatedAt: NOW,
     });
+    prismaMock.refreshToken.create.mockResolvedValue({} as any);
 
     const res = await request(app)
       .post("/auth/verify")
@@ -232,5 +235,81 @@ describe("POST /auth/verify", () => {
     expect(res.body.success).toBe(true);
     expect(prismaMock.subscriber.upsert).toHaveBeenCalledOnce();
     expect(prismaMock.merchant.upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /auth/refresh", () => {
+  let app: Express;
+
+  beforeAll(async () => {
+    app = await makeApp();
+  });
+
+  it("rotates refresh token and returns new token pair", async () => {
+    const existingToken = {
+      id: "rt1",
+      walletAddress,
+      tokenHash: "somehash",
+      family: "fam1",
+      expiresAt: FUTURE,
+      revokedAt: null,
+      createdAt: NOW,
+    };
+
+    prismaMock.refreshToken.findUnique.mockResolvedValue(existingToken as any);
+    prismaMock.refreshToken.update.mockResolvedValue({ ...existingToken, revokedAt: new Date() } as any);
+    prismaMock.merchant.findUnique.mockResolvedValue({
+      id: "m1",
+      walletAddress,
+      name: null,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    prismaMock.refreshToken.create.mockResolvedValue({} as any);
+
+    const res = await request(app)
+      .post("/auth/refresh")
+      .send({ refreshToken: "some-refresh-token" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data).toHaveProperty("accessToken");
+    expect(res.body.data).toHaveProperty("refreshToken");
+    expect(res.body.data.accessToken.split(".")).toHaveLength(3);
+  });
+
+  it("returns 401 for invalid refresh token", async () => {
+    prismaMock.refreshToken.findUnique.mockResolvedValue(null);
+
+    const res = await request(app)
+      .post("/auth/refresh")
+      .send({ refreshToken: "bad-token" });
+
+    expect(res.status).toBe(401);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error.code).toBe("UNAUTHORIZED");
+  });
+
+  it("returns 401 and revokes family for reused token", async () => {
+    const revokedToken = {
+      id: "rt2",
+      walletAddress,
+      tokenHash: "somehash2",
+      family: "fam2",
+      expiresAt: FUTURE,
+      revokedAt: new Date(),
+      createdAt: NOW,
+    };
+
+    prismaMock.refreshToken.findUnique.mockResolvedValue(revokedToken as any);
+    prismaMock.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+
+    const res = await request(app)
+      .post("/auth/refresh")
+      .send({ refreshToken: "reused-token" });
+
+    expect(res.status).toBe(401);
+    expect(res.body.success).toBe(false);
+    expect(prismaMock.refreshToken.updateMany).toHaveBeenCalledOnce();
   });
 });

@@ -76,9 +76,12 @@ function sha256Disc(name: string): Buffer {
   return Buffer.from(crypto.createHash("sha256").update(`global:${name}`).digest().subarray(0, 8));
 }
 
-function subscriptionPda(subscriber: PublicKey, merchant: PublicKey): [PublicKey, number] {
+const DEFAULT_PLAN_SEED = Buffer.alloc(8);
+DEFAULT_PLAN_SEED.writeBigUInt64LE(BigInt(1));
+
+function subscriptionPda(subscriber: PublicKey, merchant: PublicKey, planSeed: Buffer): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("subscription"), subscriber.toBuffer(), merchant.toBuffer()],
+    [Buffer.from("subscription"), subscriber.toBuffer(), merchant.toBuffer(), planSeed],
     PROGRAM_ID,
   );
 }
@@ -209,7 +212,7 @@ async function main() {
     await mintTo(conn, mintAuthority, usdcMint, subAta.address, mintAuthority, 100_000_000); // $100 USDC
 
     // Derive PDA + delegate
-    const [pda] = subscriptionPda(sub.publicKey, merchantKp.publicKey);
+    const [pda] = subscriptionPda(sub.publicKey, merchantKp.publicKey, DEFAULT_PLAN_SEED);
     await approve(conn, sub, subAta.address, pda, sub, AMOUNT * 100); // delegate for many payments
 
     // Init subscription on-chain
@@ -223,12 +226,12 @@ async function main() {
       keys: [
         { pubkey: pda, isSigner: false, isWritable: true },
         { pubkey: sub.publicKey, isSigner: true, isWritable: true },
-        { pubkey: merchantKp.publicKey, isSigner: true, isWritable: true },
+        { pubkey: merchantKp.publicKey, isSigner: false, isWritable: false },
         { pubkey: new PublicKey("11111111111111111111111111111111"), isSigner: false, isWritable: false },
       ],
-      data: Buffer.concat([sha256Disc("initialize_subscription"), amtBuf, intBuf]),
+      data: Buffer.concat([sha256Disc("initialize_subscription"), amtBuf, intBuf, DEFAULT_PLAN_SEED]),
     });
-    const sig = await sendAndConfirmTransaction(conn, new Transaction().add(initIx), [sub, merchantKp]);
+    const sig = await sendAndConfirmTransaction(conn, new Transaction().add(initIx), [sub]);
     log(`  PDA: ${pda.toBase58()} | tx: ${sig}`);
 
     // Auth subscriber + register in DB

@@ -12,9 +12,11 @@ const SUB_RECORD = {
   planId: "plan1",
   subscriberId: "s1",
   subscriptionPda: PDA,
-  isActive: true,
+  status: "active",
+  nextPaymentDue: null,
   lastPaymentAt: null,
   cancelRequestedAt: null,
+  cancelledAt: null,
   createdAt: NOW,
   updatedAt: NOW,
 };
@@ -35,7 +37,11 @@ describe("keeper routes", () => {
 
   describe("POST /keeper/payment", () => {
     it("records a successful payment", async () => {
-      prismaMock.subscription.findUnique.mockResolvedValue(SUB_RECORD as any);
+      prismaMock.subscription.findUnique.mockResolvedValue({
+        ...SUB_RECORD,
+        plan: { id: "plan1", intervalSeconds: 2592000 },
+      } as any);
+      prismaMock.subscriptionEvent.create.mockResolvedValue({} as any);
       prismaMock.merchantTransaction.upsert.mockResolvedValue({
         id: "tx1",
         subscriptionId: "sub1",
@@ -88,6 +94,8 @@ describe("keeper routes", () => {
   describe("POST /keeper/payment-failed", () => {
     it("records a failed payment", async () => {
       prismaMock.subscription.findUnique.mockResolvedValue(SUB_RECORD as any);
+      prismaMock.subscription.update.mockResolvedValue({ ...SUB_RECORD, status: "past_due" } as any);
+      prismaMock.subscriptionEvent.create.mockResolvedValue({} as any);
       prismaMock.merchantTransaction.upsert.mockResolvedValue({
         id: "tx2",
         subscriptionId: "sub1",
@@ -119,6 +127,7 @@ describe("keeper routes", () => {
     it("records a cancel request", async () => {
       prismaMock.subscription.findUnique.mockResolvedValue(SUB_RECORD as any);
       prismaMock.subscription.update.mockResolvedValue(SUB_RECORD as any);
+      prismaMock.subscriptionEvent.create.mockResolvedValue({} as any);
 
       const res = await request(app)
         .post("/keeper/cancel")
@@ -135,9 +144,11 @@ describe("keeper routes", () => {
 
     it("records a force cancel", async () => {
       prismaMock.subscription.findUnique.mockResolvedValue(SUB_RECORD as any);
+      prismaMock.subscriptionEvent.create.mockResolvedValue({} as any);
       prismaMock.subscription.update.mockResolvedValue({
         ...SUB_RECORD,
-        isActive: false,
+        status: "cancelled",
+        cancelledAt: NOW,
       } as any);
 
       const res = await request(app)
@@ -165,11 +176,13 @@ describe("keeper routes", () => {
       prismaMock.plan.findUnique.mockResolvedValue({
         id: "plan1",
         isActive: true,
+        intervalSeconds: 2592000,
       } as any);
       prismaMock.subscription.upsert.mockResolvedValue({
         id: "sub1",
         subscriptionPda: PDA,
       } as any);
+      prismaMock.subscriptionEvent.create.mockResolvedValue({} as any);
 
       const res = await request(app)
         .post("/keeper/subscription")

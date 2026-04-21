@@ -91,9 +91,12 @@ async function api(
   return { status: res.status, json };
 }
 
-function subscriptionPda(subscriber: PublicKey, merchant: PublicKey): [PublicKey, number] {
+const DEFAULT_PLAN_SEED = Buffer.alloc(8);
+DEFAULT_PLAN_SEED.writeBigUInt64LE(BigInt(1));
+
+function subscriptionPda(subscriber: PublicKey, merchant: PublicKey, planSeed: Buffer): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("subscription"), subscriber.toBuffer(), merchant.toBuffer()],
+    [Buffer.from("subscription"), subscriber.toBuffer(), merchant.toBuffer(), planSeed],
     PROGRAM_ID,
   );
 }
@@ -207,7 +210,7 @@ async function main() {
 
   // Step 4: Initialize subscription on-chain
   log("4", "Initializing subscription on-chain");
-  const [subPda] = subscriptionPda(subscriberKp.publicKey, merchantKp.publicKey);
+  const [subPda] = subscriptionPda(subscriberKp.publicKey, merchantKp.publicKey, DEFAULT_PLAN_SEED);
 
   // Delegate to subscription PDA first
   await approve(conn, subscriberKp, subscriberAta.address, subPda, subscriberKp, AMOUNT * 10);
@@ -217,20 +220,21 @@ async function main() {
   amountBuf.writeBigUInt64LE(BigInt(AMOUNT));
   const intervalBuf = Buffer.alloc(8);
   intervalBuf.writeBigUInt64LE(BigInt(INTERVAL));
+  const planSeedArray = Buffer.from(Array.from(DEFAULT_PLAN_SEED));
 
   const initSubIx = new TransactionInstruction({
     programId: PROGRAM_ID,
     keys: [
       { pubkey: subPda, isSigner: false, isWritable: true },
       { pubkey: subscriberKp.publicKey, isSigner: true, isWritable: true },
-      { pubkey: merchantKp.publicKey, isSigner: true, isWritable: true },
+      { pubkey: merchantKp.publicKey, isSigner: false, isWritable: false },
       { pubkey: new PublicKey("11111111111111111111111111111111"), isSigner: false, isWritable: false },
     ],
-    data: Buffer.concat([initSubDisc, amountBuf, intervalBuf]),
+    data: Buffer.concat([initSubDisc, amountBuf, intervalBuf, planSeedArray]),
   });
 
   const subTx = new Transaction().add(initSubIx);
-  const subSig = await sendAndConfirmTransaction(conn, subTx, [subscriberKp, merchantKp]);
+  const subSig = await sendAndConfirmTransaction(conn, subTx, [subscriberKp]);
   log("4", `Subscription PDA: ${subPda.toBase58()} | tx: ${subSig}`);
 
   // Step 5: Authenticate via API

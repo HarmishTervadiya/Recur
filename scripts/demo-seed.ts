@@ -124,9 +124,12 @@ function sha256Disc(name: string): Buffer {
   );
 }
 
-function subscriptionPda(subscriber: PublicKey, merchant: PublicKey): PublicKey {
+const DEFAULT_PLAN_SEED = Buffer.alloc(8);
+DEFAULT_PLAN_SEED.writeBigUInt64LE(BigInt(1));
+
+function subscriptionPda(subscriber: PublicKey, merchant: PublicKey, planSeed: Buffer): PublicKey {
   const [pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("subscription"), subscriber.toBuffer(), merchant.toBuffer()],
+    [Buffer.from("subscription"), subscriber.toBuffer(), merchant.toBuffer(), planSeed],
     PROGRAM_ID,
   );
   return pda;
@@ -256,7 +259,7 @@ async function main() {
 
   // ── 7. Initialize subscription on-chain ───────────────────────────────
   log("Initializing subscription on-chain...");
-  const pda = subscriptionPda(subscriberKp.publicKey, merchantKp.publicKey);
+  const pda = subscriptionPda(subscriberKp.publicKey, merchantKp.publicKey, DEFAULT_PLAN_SEED);
 
   await approve(conn, subscriberKp, subscriberAta.address, pda, subscriberKp, 100_000_000);
 
@@ -270,12 +273,12 @@ async function main() {
     keys: [
       { pubkey: pda, isSigner: false, isWritable: true },
       { pubkey: subscriberKp.publicKey, isSigner: true, isWritable: true },
-      { pubkey: merchantKp.publicKey, isSigner: true, isWritable: true },
+      { pubkey: merchantKp.publicKey, isSigner: false, isWritable: false },
       { pubkey: new PublicKey("11111111111111111111111111111111"), isSigner: false, isWritable: false },
     ],
-    data: Buffer.concat([sha256Disc("initialize_subscription"), amtBuf, intBuf]),
+    data: Buffer.concat([sha256Disc("initialize_subscription"), amtBuf, intBuf, DEFAULT_PLAN_SEED]),
   });
-  const subSig = await send(new Transaction().add(initIx), [subscriberKp, merchantKp]);
+  const subSig = await send(new Transaction().add(initIx), [subscriberKp]);
   log(`Subscription PDA: ${pda.toBase58()} | tx: ${subSig}`);
 
   // ── 8. Register merchant + plan in DB ─────────────────────────────────

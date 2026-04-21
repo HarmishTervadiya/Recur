@@ -3,12 +3,16 @@ import { z } from "zod";
 import { prisma } from "@recur/db";
 import { authenticate, requireSubscriber } from "../../middleware/auth.js";
 import { wrap, AppError } from "../../middleware/errors.js";
-import { ok } from "../../middleware/response.js";
+import { ok, okPaginated, parsePagination } from "../../middleware/response.js";
 import { ErrorCode } from "../../errors.js";
 
 const router: ExpressRouter = Router();
 
 router.use(authenticate, requireSubscriber);
+
+// ---------------------------------------------------------------------------
+// Subscriber profile
+// ---------------------------------------------------------------------------
 
 router.get(
   "/me",
@@ -25,18 +29,55 @@ router.get(
   }),
 );
 
+const UpdateSubscriberBody = z.object({
+  name: z.string().max(100).optional(),
+  email: z.string().email().optional(),
+});
+
+router.patch(
+  "/me",
+  wrap(async (req, res) => {
+    const data = UpdateSubscriberBody.parse(req.body);
+    const subscriber = await prisma.subscriber.update({
+      where: { walletAddress: req.user!.walletAddress },
+      data,
+    });
+    ok(res, subscriber);
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Subscriptions
+// ---------------------------------------------------------------------------
+
 router.get(
   "/subscriptions",
   wrap(async (req, res) => {
     const subscriber = await getSubscriber(req.user!.walletAddress);
-    const subs = await prisma.subscription.findMany({
-      where: { subscriberId: subscriber.id },
-      orderBy: { createdAt: "desc" },
-      include: {
-        plan: { include: { app: { include: { merchant: true } } } },
-      },
-    });
-    ok(res, subs.map(serializeSubscription));
+    const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>);
+    const statusFilter = req.query["status"] as string | undefined;
+
+    const where: Record<string, unknown> = { subscriberId: subscriber.id };
+    if (statusFilter) where["status"] = statusFilter;
+
+    const [subs, total] = await Promise.all([
+      prisma.subscription.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+        include: {
+          plan: { include: { app: { include: { merchant: true } } } },
+        },
+      }),
+      prisma.subscription.count({ where }),
+    ]);
+
+    okPaginated(
+      res,
+      subs.map(serializeSubscription),
+      { page, pageSize: limit, total, totalPages: Math.ceil(total / limit) },
+    );
   }),
 );
 
@@ -78,8 +119,19 @@ router.post(
     if (!plan.isActive)
       throw new AppError(ErrorCode.PLAN_INACTIVE, "Plan is not active");
 
+    // Compute first payment due date
+    const nextPaymentDue = new Date(
+      Date.now() + plan.intervalSeconds * 1000,
+    );
+
     const sub = await prisma.subscription.create({
-      data: { planId, subscriberId: subscriber.id, subscriptionPda },
+      data: {
+        planId,
+        subscriberId: subscriber.id,
+        subscriptionPda,
+        status: "active",
+        nextPaymentDue,
+      },
       include: { plan: true },
     });
     ok(res, serializeSubscription(sub), 201);
@@ -99,18 +151,31 @@ router.get(
         "Subscription not found",
       );
 
-    const page = Math.max(1, Number(req.query["page"] ?? 1));
-    const limit = Math.min(100, Math.max(1, Number(req.query["limit"] ?? 20)));
+    const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>);
 
-    const transactions = await prisma.merchantTransaction.findMany({
-      where: { subscriptionId: sub.id },
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
-    ok(res, transactions.map(serializeTx));
+    const [transactions, total] = await Promise.all([
+      prisma.merchantTransaction.findMany({
+        where: { subscriptionId: sub.id },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.merchantTransaction.count({
+        where: { subscriptionId: sub.id },
+      }),
+    ]);
+
+    okPaginated(
+      res,
+      transactions.map(serializeTx),
+      { page, pageSize: limit, total, totalPages: Math.ceil(total / limit) },
+    );
   }),
 );
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 async function getSubscriber(walletAddress: string) {
   const s = await prisma.subscriber.findUnique({ where: { walletAddress } });

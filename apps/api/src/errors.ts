@@ -5,6 +5,7 @@ export const ErrorCode = {
   NOT_FOUND: "NOT_FOUND",
   CONFLICT: "CONFLICT",
   INTERNAL_ERROR: "INTERNAL_ERROR",
+  RATE_LIMITED: "RATE_LIMITED",
 
   NONCE_NOT_FOUND: "NONCE_NOT_FOUND",
   NONCE_EXPIRED: "NONCE_EXPIRED",
@@ -20,6 +21,9 @@ export const ErrorCode = {
   SUBSCRIBER_NOT_FOUND: "SUBSCRIBER_NOT_FOUND",
   SUBSCRIPTION_NOT_FOUND: "SUBSCRIPTION_NOT_FOUND",
 
+  WEBHOOK_NOT_FOUND: "WEBHOOK_NOT_FOUND",
+  API_KEY_NOT_FOUND: "API_KEY_NOT_FOUND",
+
   MISSING_APP_ID: "MISSING_APP_ID",
 } as const;
 
@@ -32,6 +36,7 @@ export const ERROR_HTTP_STATUS: Record<ErrorCode, number> = {
   NOT_FOUND: 404,
   CONFLICT: 409,
   INTERNAL_ERROR: 500,
+  RATE_LIMITED: 429,
 
   NONCE_NOT_FOUND: 400,
   NONCE_EXPIRED: 400,
@@ -47,12 +52,23 @@ export const ERROR_HTTP_STATUS: Record<ErrorCode, number> = {
   SUBSCRIBER_NOT_FOUND: 404,
   SUBSCRIPTION_NOT_FOUND: 404,
 
+  WEBHOOK_NOT_FOUND: 404,
+  API_KEY_NOT_FOUND: 404,
+
   MISSING_APP_ID: 400,
 };
+
+export interface PaginationMeta {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
 
 export interface ApiSuccess<T = unknown> {
   success: true;
   data: T;
+  pagination?: PaginationMeta;
   error: null;
 }
 

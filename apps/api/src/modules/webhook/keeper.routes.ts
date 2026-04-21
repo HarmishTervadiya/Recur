@@ -7,6 +7,7 @@ import {
 } from "express";
 import { z } from "zod";
 import { prisma } from "@recur/db";
+import { env } from "@recur/config";
 import { createLogger } from "@recur/logger";
 import { wrap, AppError } from "../../middleware/errors.js";
 import { ok, fail } from "../../middleware/response.js";
@@ -21,8 +22,7 @@ function verifyKeeperSecret(
   next: NextFunction,
 ): void {
   const secret = req.headers["x-keeper-secret"];
-  const expected = process.env["KEEPER_SECRET"];
-  if (!expected || secret !== expected) {
+  if (!secret || secret !== env.KEEPER_SECRET) {
     fail(res, ErrorCode.UNAUTHORIZED, "Unauthorized");
     return;
   }
@@ -31,12 +31,18 @@ function verifyKeeperSecret(
 
 router.use(verifyKeeperSecret);
 
+// ---------------------------------------------------------------------------
+// POST /keeper/payment — successful payment
+// ---------------------------------------------------------------------------
+
 const PaymentEventBody = z.object({
   subscriptionPda: z.string().min(32),
   txSignature: z.string().min(32),
   amountGross: z.string().regex(/^\d+$/),
   platformFee: z.string().regex(/^\d+$/),
   amountNet: z.string().regex(/^\d+$/),
+  fromWallet: z.string().min(32).optional(),
+  toWallet: z.string().min(32).optional(),
   confirmedAt: z.string().datetime(),
 });
 
@@ -47,12 +53,19 @@ router.post(
 
     const subscription = await prisma.subscription.findUnique({
       where: { subscriptionPda: body.subscriptionPda },
+      include: { plan: true },
     });
     if (!subscription)
       throw new AppError(
         ErrorCode.SUBSCRIPTION_NOT_FOUND,
         `Subscription not found for PDA ${body.subscriptionPda}`,
       );
+
+    // Compute next payment due
+    const confirmedDate = new Date(body.confirmedAt);
+    const nextPaymentDue = new Date(
+      confirmedDate.getTime() + subscription.plan.intervalSeconds * 1000,
+    );
 
     const tx = await prisma.merchantTransaction.upsert({
       where: { txSignature: body.txSignature },
@@ -63,6 +76,8 @@ router.post(
         amountGross: BigInt(body.amountGross),
         platformFee: BigInt(body.platformFee),
         amountNet: BigInt(body.amountNet),
+        fromWallet: body.fromWallet,
+        toWallet: body.toWallet,
         status: "success",
       },
     });
@@ -70,9 +85,24 @@ router.post(
     await prisma.subscription.update({
       where: { id: subscription.id },
       data: {
-        lastPaymentAt: new Date(body.confirmedAt),
-        isActive: true,
+        lastPaymentAt: confirmedDate,
+        nextPaymentDue,
+        status: "active",
         cancelRequestedAt: null,
+      },
+    });
+
+    // Write audit event
+    await prisma.subscriptionEvent.create({
+      data: {
+        subscriptionId: subscription.id,
+        eventType: "payment_success",
+        txSignature: body.txSignature,
+        metadata: {
+          amountGross: body.amountGross,
+          platformFee: body.platformFee,
+          amountNet: body.amountNet,
+        },
       },
     });
 
@@ -90,6 +120,10 @@ router.post(
     ok(res, { id: tx.id }, 201);
   }),
 );
+
+// ---------------------------------------------------------------------------
+// POST /keeper/payment-failed
+// ---------------------------------------------------------------------------
 
 const PaymentFailedBody = z.object({
   subscriptionPda: z.string().min(32),
@@ -126,11 +160,34 @@ router.post(
       },
     });
 
+    // Mark subscription as past_due on payment failure
+    await prisma.subscription.update({
+      where: { id: subscription.id },
+      data: { status: "past_due" },
+    });
+
+    // Write audit event
+    await prisma.subscriptionEvent.create({
+      data: {
+        subscriptionId: subscription.id,
+        eventType: "payment_failed",
+        txSignature: body.txSignature,
+        metadata: {
+          amountGross: body.amountGross,
+          error: "Payment transaction failed",
+        },
+      },
+    });
+
     logger.warn({ pda: body.subscriptionPda, tx: body.txSignature }, "Payment FAILED recorded");
 
     ok(res, { id: tx.id }, 201);
   }),
 );
+
+// ---------------------------------------------------------------------------
+// POST /keeper/cancel
+// ---------------------------------------------------------------------------
 
 const CancelEventBody = z.object({
   subscriptionPda: z.string().min(32),
@@ -155,25 +212,48 @@ router.post(
     const isFinalized =
       body.cancelType === "finalize" || body.cancelType === "force";
 
+    const updateData: Record<string, unknown> = {};
+    if (body.cancelType === "request") {
+      updateData["cancelRequestedAt"] = new Date(body.confirmedAt);
+    }
+    if (isFinalized) {
+      updateData["status"] = "cancelled";
+      updateData["cancelledAt"] = new Date(body.confirmedAt);
+      updateData["nextPaymentDue"] = null;
+    }
+
     await prisma.subscription.update({
       where: { id: subscription.id },
+      data: updateData,
+    });
+
+    // Map cancel type to event type
+    const eventTypeMap = {
+      request: "cancel_requested" as const,
+      finalize: "cancel_finalized" as const,
+      force: "cancel_forced" as const,
+    };
+
+    await prisma.subscriptionEvent.create({
       data: {
-        cancelRequestedAt:
-          body.cancelType === "request"
-            ? new Date(body.confirmedAt)
-            : subscription.cancelRequestedAt,
-        isActive: !isFinalized,
+        subscriptionId: subscription.id,
+        eventType: eventTypeMap[body.cancelType],
+        metadata: { cancelType: body.cancelType },
       },
     });
 
     logger.info(
-      { pda: body.subscriptionPda, type: body.cancelType, isActive: !isFinalized },
+      { pda: body.subscriptionPda, type: body.cancelType, status: isFinalized ? "cancelled" : "active" },
       "Cancel event recorded",
     );
 
     ok(res, { ok: true });
   }),
 );
+
+// ---------------------------------------------------------------------------
+// POST /keeper/subscription — new subscription discovered
+// ---------------------------------------------------------------------------
 
 const SubscriptionCreatedBody = z.object({
   subscriptionPda: z.string().min(32),
@@ -196,14 +276,30 @@ router.post(
     const plan = await prisma.plan.findUnique({ where: { id: body.planId } });
     if (!plan) throw new AppError(ErrorCode.PLAN_NOT_FOUND, "Plan not found");
 
+    const confirmedDate = new Date(body.confirmedAt);
+    const nextPaymentDue = new Date(
+      confirmedDate.getTime() + plan.intervalSeconds * 1000,
+    );
+
     const subscription = await prisma.subscription.upsert({
       where: { subscriptionPda: body.subscriptionPda },
-      update: { isActive: true },
+      update: { status: "active" },
       create: {
         subscriptionPda: body.subscriptionPda,
         planId: body.planId,
         subscriberId: subscriber.id,
-        createdAt: new Date(body.confirmedAt),
+        status: "active",
+        nextPaymentDue,
+        createdAt: confirmedDate,
+      },
+    });
+
+    // Write audit event
+    await prisma.subscriptionEvent.create({
+      data: {
+        subscriptionId: subscription.id,
+        eventType: "subscription_created",
+        metadata: { subscriberWallet: body.subscriberWallet, planId: body.planId },
       },
     });
 

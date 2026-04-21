@@ -1,14 +1,19 @@
 import { Router, type Router as ExpressRouter } from "express";
 import { z } from "zod";
+import crypto from "crypto";
 import { prisma } from "@recur/db";
 import { authenticate, requireMerchant } from "../../middleware/auth.js";
 import { wrap, AppError } from "../../middleware/errors.js";
-import { ok } from "../../middleware/response.js";
+import { ok, okPaginated, parsePagination } from "../../middleware/response.js";
 import { ErrorCode } from "../../errors.js";
 
 const router: ExpressRouter = Router();
 
 router.use(authenticate, requireMerchant);
+
+// ---------------------------------------------------------------------------
+// Merchant profile
+// ---------------------------------------------------------------------------
 
 router.get(
   "/me",
@@ -24,20 +29,29 @@ router.get(
 );
 
 const UpdateMerchantBody = z.object({
-  name: z.string().min(1).max(100),
+  name: z.string().min(1).max(100).optional(),
+  email: z.string().email().optional(),
+  phone: z.string().max(20).optional(),
+  businessName: z.string().max(200).optional(),
+  businessUrl: z.string().url().optional(),
+  logoUrl: z.string().url().optional(),
 });
 
 router.patch(
   "/me",
   wrap(async (req, res) => {
-    const { name } = UpdateMerchantBody.parse(req.body);
+    const data = UpdateMerchantBody.parse(req.body);
     const merchant = await prisma.merchant.update({
       where: { walletAddress: req.user!.walletAddress },
-      data: { name },
+      data,
     });
     ok(res, merchant);
   }),
 );
+
+// ---------------------------------------------------------------------------
+// Apps
+// ---------------------------------------------------------------------------
 
 router.get(
   "/apps",
@@ -111,6 +125,10 @@ router.delete(
   }),
 );
 
+// ---------------------------------------------------------------------------
+// Plans
+// ---------------------------------------------------------------------------
+
 router.get(
   "/apps/:appId/plans",
   wrap(async (req, res) => {
@@ -138,11 +156,16 @@ router.post(
   wrap(async (req, res) => {
     await getOwnedApp(req.user!.walletAddress, req.params["appId"]!);
     const body = CreatePlanBody.parse(req.body);
+
+    // Generate a unique 8-byte plan seed (hex-encoded for storage).
+    const planSeed = crypto.randomBytes(8).toString("hex");
+
     const plan = await prisma.plan.create({
       data: {
         appId: req.params["appId"]!,
         name: body.name,
         description: body.description,
+        planSeed,
         amountBaseUnits: BigInt(body.amountBaseUnits),
         intervalSeconds: body.intervalSeconds,
         currency: body.currency,
@@ -183,24 +206,157 @@ router.patch(
   }),
 );
 
+// ---------------------------------------------------------------------------
+// Transactions (with pagination metadata)
+// ---------------------------------------------------------------------------
+
 router.get(
   "/apps/:appId/transactions",
   wrap(async (req, res) => {
     await getOwnedApp(req.user!.walletAddress, req.params["appId"]!);
 
-    const page = Math.max(1, Number(req.query["page"] ?? 1));
-    const limit = Math.min(100, Math.max(1, Number(req.query["limit"] ?? 20)));
+    const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>);
 
-    const transactions = await prisma.merchantTransaction.findMany({
-      where: { subscription: { plan: { appId: req.params["appId"] } } },
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * limit,
-      take: limit,
-      include: { subscription: { include: { plan: true } } },
-    });
-    ok(res, transactions.map(serializeTransaction));
+    const [transactions, total] = await Promise.all([
+      prisma.merchantTransaction.findMany({
+        where: { subscription: { plan: { appId: req.params["appId"] } } },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+        include: { subscription: { include: { plan: true } } },
+      }),
+      prisma.merchantTransaction.count({
+        where: { subscription: { plan: { appId: req.params["appId"] } } },
+      }),
+    ]);
+
+    okPaginated(
+      res,
+      transactions.map(serializeTransaction),
+      { page, pageSize: limit, total, totalPages: Math.ceil(total / limit) },
+    );
   }),
 );
+
+// ---------------------------------------------------------------------------
+// Webhook Endpoints (CRUD)
+// ---------------------------------------------------------------------------
+
+const CreateWebhookBody = z.object({
+  url: z.string().url(),
+  events: z.array(z.string()).default([]),
+});
+
+router.post(
+  "/apps/:appId/webhooks",
+  wrap(async (req, res) => {
+    await getOwnedApp(req.user!.walletAddress, req.params["appId"]!);
+    const body = CreateWebhookBody.parse(req.body);
+    const rawSecret = crypto.randomBytes(32).toString("hex");
+
+    const endpoint = await prisma.webhookEndpoint.create({
+      data: {
+        appId: req.params["appId"]!,
+        url: body.url,
+        secret: crypto.createHash("sha256").update(rawSecret).digest("hex"),
+        events: body.events,
+      },
+    });
+
+    // Return the raw secret once — it's stored hashed.
+    ok(res, { ...endpoint, signingSecret: rawSecret }, 201);
+  }),
+);
+
+router.get(
+  "/apps/:appId/webhooks",
+  wrap(async (req, res) => {
+    await getOwnedApp(req.user!.walletAddress, req.params["appId"]!);
+    const endpoints = await prisma.webhookEndpoint.findMany({
+      where: { appId: req.params["appId"] },
+      orderBy: { createdAt: "desc" },
+    });
+    // Strip secret hash from response
+    ok(res, endpoints.map(({ secret, ...e }) => e));
+  }),
+);
+
+router.delete(
+  "/apps/:appId/webhooks/:webhookId",
+  wrap(async (req, res) => {
+    await getOwnedApp(req.user!.walletAddress, req.params["appId"]!);
+    const endpoint = await prisma.webhookEndpoint.findFirst({
+      where: { id: req.params["webhookId"], appId: req.params["appId"] },
+    });
+    if (!endpoint)
+      throw new AppError(ErrorCode.WEBHOOK_NOT_FOUND, "Webhook endpoint not found");
+    await prisma.webhookEndpoint.delete({ where: { id: endpoint.id } });
+    res.status(204).send();
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// API Keys
+// ---------------------------------------------------------------------------
+
+const CreateApiKeyBody = z.object({
+  label: z.string().max(100).optional(),
+});
+
+router.post(
+  "/api-keys",
+  wrap(async (req, res) => {
+    const body = CreateApiKeyBody.parse(req.body);
+    const merchant = await getMerchant(req.user!.walletAddress);
+    const rawKey = `sk_live_${crypto.randomBytes(24).toString("base64url")}`;
+
+    const apiKey = await prisma.apiKey.create({
+      data: {
+        merchantId: merchant.id,
+        prefix: rawKey.slice(0, 16),
+        keyHash: crypto.createHash("sha256").update(rawKey).digest("hex"),
+        label: body.label,
+      },
+    });
+
+    // Return the raw key once.
+    ok(res, { id: apiKey.id, key: rawKey, prefix: apiKey.prefix, label: apiKey.label }, 201);
+  }),
+);
+
+router.get(
+  "/api-keys",
+  wrap(async (req, res) => {
+    const merchant = await getMerchant(req.user!.walletAddress);
+    const keys = await prisma.apiKey.findMany({
+      where: { merchantId: merchant.id, revokedAt: null },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, prefix: true, label: true, lastUsedAt: true, createdAt: true },
+    });
+    ok(res, keys);
+  }),
+);
+
+router.delete(
+  "/api-keys/:keyId",
+  wrap(async (req, res) => {
+    const merchant = await getMerchant(req.user!.walletAddress);
+    const key = await prisma.apiKey.findFirst({
+      where: { id: req.params["keyId"], merchantId: merchant.id, revokedAt: null },
+    });
+    if (!key)
+      throw new AppError(ErrorCode.API_KEY_NOT_FOUND, "API key not found");
+    await prisma.apiKey.update({
+      where: { id: key.id },
+      data: { revokedAt: new Date() },
+    });
+    res.status(204).send();
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 async function getMerchant(walletAddress: string) {
   const merchant = await prisma.merchant.findUnique({

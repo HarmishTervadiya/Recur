@@ -65,8 +65,8 @@ export function buildFinalizeCancelIx(
     programId: PROGRAM_ID,
     keys: [
       { pubkey: subscriptionPda, isSigner: false, isWritable: true },
-      { pubkey: sub.subscriber, isSigner: false, isWritable: false },
-      { pubkey: sub.merchant, isSigner: false, isWritable: true },
+      { pubkey: sub.subscriber, isSigner: false, isWritable: true },  // rent refund destination
+      { pubkey: sub.merchant, isSigner: false, isWritable: false },
     ],
     data: FINALIZE_CANCEL_DISCRIMINATOR,
   });
@@ -81,8 +81,8 @@ export function buildForceCancelIx(
     programId: PROGRAM_ID,
     keys: [
       { pubkey: subscriptionPda, isSigner: false, isWritable: true },
-      { pubkey: sub.subscriber, isSigner: false, isWritable: false },
-      { pubkey: sub.merchant, isSigner: false, isWritable: true },
+      { pubkey: sub.subscriber, isSigner: false, isWritable: true },  // rent refund destination
+      { pubkey: sub.merchant, isSigner: false, isWritable: false },
       { pubkey: keeper, isSigner: true, isWritable: false },
     ],
     data: FORCE_CANCEL_DISCRIMINATOR,

@@ -57,10 +57,11 @@ const platformFee = (amount: bigint) => FLAT_FEE + (amount * BPS) / BPS_DENOM;
 function subscriptionPda(
   subscriber: PublicKey,
   merchant: PublicKey,
+  planSeed: Buffer,
   programId: PublicKey,
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("subscription"), subscriber.toBuffer(), merchant.toBuffer()],
+    [Buffer.from("subscription"), subscriber.toBuffer(), merchant.toBuffer(), planSeed],
     programId,
   );
 }
@@ -128,12 +129,19 @@ describe("recur", () => {
   let mint: PublicKey;
   let [vaultPda] = treasuryVaultPda(program.programId);
 
+  // Default plan seed for tests — 8 bytes
+  const DEFAULT_PLAN_SEED = Buffer.alloc(8);
+  DEFAULT_PLAN_SEED.writeBigUInt64LE(BigInt(1));
+
   // ---------------------------------------------------------------------------
   // Shared subscription setup factory
   // ---------------------------------------------------------------------------
-  async function setupSubscription(intervalSec = INTERVAL) {
+  async function setupSubscription(intervalSec = INTERVAL, planSeedVal = BigInt(1)) {
     const subscriber = Keypair.generate();
     const merchant = Keypair.generate();
+
+    const planSeed = Buffer.alloc(8);
+    planSeed.writeBigUInt64LE(planSeedVal);
 
     await airdrop(conn, subscriber.publicKey);
     await airdrop(conn, merchant.publicKey);
@@ -163,6 +171,7 @@ describe("recur", () => {
     const [subPda] = subscriptionPda(
       subscriber.publicKey,
       merchant.publicKey,
+      planSeed,
       program.programId,
     );
 
@@ -177,12 +186,12 @@ describe("recur", () => {
     );
 
     await program.methods
-      .initializeSubscription(AMOUNT, new anchor.BN(intervalSec))
+      .initializeSubscription(AMOUNT, new anchor.BN(intervalSec), Array.from(planSeed) as any)
       .accounts({
         subscriber: subscriber.publicKey,
         merchant: merchant.publicKey,
       })
-      .signers([subscriber, merchant])
+      .signers([subscriber])
       .rpc();
 
     return {
@@ -192,6 +201,7 @@ describe("recur", () => {
       merchantAta: merchantAta.address,
       subPda,
       intervalSec,
+      planSeed,
     };
   }
 
@@ -281,11 +291,12 @@ describe("recur", () => {
   // ---------------------------------------------------------------------------
   describe("initialize_subscription", () => {
     it("creates a Subscription PDA with correct fields", async () => {
-      const { subscriber, merchant, subPda } = await setupSubscription();
+      const { subscriber, merchant, subPda, planSeed } = await setupSubscription();
       const sub = await program.account.subscription.fetch(subPda);
 
       assert.equal(sub.subscriber.toBase58(), subscriber.publicKey.toBase58());
       assert.equal(sub.merchant.toBase58(), merchant.publicKey.toBase58());
+      assert.deepEqual(Buffer.from(sub.planSeed as number[]), planSeed);
       assert.equal(sub.amount.toString(), AMOUNT.toString());
       assert.equal(sub.interval.toNumber(), INTERVAL);
       assert.equal(sub.cancelRequestedAt.toString(), "0");
@@ -294,20 +305,60 @@ describe("recur", () => {
       assert.equal(typeof sub.bump, "number");
     });
 
+    it("allows multiple subscriptions between same subscriber-merchant with different plan_seed", async () => {
+      const subscriber = Keypair.generate();
+      const merchant = Keypair.generate();
+      await airdrop(conn, subscriber.publicKey);
+
+      const planSeed1 = Buffer.alloc(8);
+      planSeed1.writeBigUInt64LE(BigInt(100));
+      const planSeed2 = Buffer.alloc(8);
+      planSeed2.writeBigUInt64LE(BigInt(200));
+
+      const subscriberAta = await getOrCreateAssociatedTokenAccount(conn, subscriber, mint, subscriber.publicKey);
+      await mintTo(conn, mintAuthority, mint, subscriberAta.address, mintAuthority, 5_000 * 1_000_000);
+
+      // Create first subscription
+      const [subPda1] = subscriptionPda(subscriber.publicKey, merchant.publicKey, planSeed1, program.programId);
+      await approve(conn, subscriber, subscriberAta.address, subPda1, subscriber, AMOUNT.toNumber() * 10);
+
+      await program.methods
+        .initializeSubscription(AMOUNT, new anchor.BN(INTERVAL), Array.from(planSeed1) as any)
+        .accounts({ subscriber: subscriber.publicKey, merchant: merchant.publicKey })
+        .signers([subscriber])
+        .rpc();
+
+      // Create second subscription with different plan_seed
+      const [subPda2] = subscriptionPda(subscriber.publicKey, merchant.publicKey, planSeed2, program.programId);
+      await approve(conn, subscriber, subscriberAta.address, subPda2, subscriber, AMOUNT.toNumber() * 10);
+
+      await program.methods
+        .initializeSubscription(AMOUNT, new anchor.BN(INTERVAL), Array.from(planSeed2) as any)
+        .accounts({ subscriber: subscriber.publicKey, merchant: merchant.publicKey })
+        .signers([subscriber])
+        .rpc();
+
+      // Both should exist
+      const sub1 = await program.account.subscription.fetch(subPda1);
+      const sub2 = await program.account.subscription.fetch(subPda2);
+      assert.ok(sub1, "first subscription should exist");
+      assert.ok(sub2, "second subscription should exist");
+      assert.notEqual(subPda1.toBase58(), subPda2.toBase58());
+    });
+
     it("rejects amount below $1.00 (< 1_000_000 base units)", async () => {
       const subscriber = Keypair.generate();
       const merchant = Keypair.generate();
       await airdrop(conn, subscriber.publicKey);
-      await airdrop(conn, merchant.publicKey);
 
       try {
         await program.methods
-          .initializeSubscription(new anchor.BN(999_999), new anchor.BN(60))
+          .initializeSubscription(new anchor.BN(999_999), new anchor.BN(60), Array.from(DEFAULT_PLAN_SEED) as any)
           .accounts({
             subscriber: subscriber.publicKey,
             merchant: merchant.publicKey,
           })
-          .signers([subscriber, merchant])
+          .signers([subscriber])
           .rpc();
         assert.fail("should have rejected invalid amount");
       } catch (e: any) {
@@ -323,16 +374,15 @@ describe("recur", () => {
       const subscriber = Keypair.generate();
       const merchant = Keypair.generate();
       await airdrop(conn, subscriber.publicKey);
-      await airdrop(conn, merchant.publicKey);
 
       try {
         await program.methods
-          .initializeSubscription(AMOUNT, new anchor.BN(0))
+          .initializeSubscription(AMOUNT, new anchor.BN(0), Array.from(DEFAULT_PLAN_SEED) as any)
           .accounts({
             subscriber: subscriber.publicKey,
             merchant: merchant.publicKey,
           })
-          .signers([subscriber, merchant])
+          .signers([subscriber])
           .rpc();
         assert.fail("should have rejected zero interval");
       } catch (e: any) {

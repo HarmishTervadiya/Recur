@@ -11,10 +11,11 @@ export const USDC_MINT_DEVNET = new PublicKey(
 export function findSubscriptionPda(
   subscriber: PublicKey,
   merchant: PublicKey,
+  planSeed: Buffer | Uint8Array,
   programId: PublicKey = PROGRAM_ID,
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("subscription"), subscriber.toBuffer(), merchant.toBuffer()],
+    [Buffer.from("subscription"), subscriber.toBuffer(), merchant.toBuffer(), Buffer.from(planSeed)],
     programId,
   );
 }

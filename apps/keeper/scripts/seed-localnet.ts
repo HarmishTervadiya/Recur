@@ -63,6 +63,9 @@ const INIT_SUBSCRIPTION_DISCRIMINATOR = Buffer.from([
   208, 156, 144, 38, 56, 65, 152, 18,
 ]);
 
+const DEFAULT_PLAN_SEED = Buffer.alloc(8);
+DEFAULT_PLAN_SEED.writeBigUInt64LE(BigInt(1));
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function airdrop(
@@ -103,17 +106,19 @@ function buildInitSubscriptionIx(
   merchant: PublicKey,
   amount: bigint,
   interval: bigint,
+  planSeed: Buffer,
 ): TransactionInstruction {
-  const data = Buffer.alloc(8 + 8 + 8);
+  const data = Buffer.alloc(8 + 8 + 8 + 8);
   INIT_SUBSCRIPTION_DISCRIMINATOR.copy(data, 0);
   data.writeBigUInt64LE(amount, 8);
   data.writeBigUInt64LE(interval, 16);
+  planSeed.copy(data, 24);
   return new TransactionInstruction({
     programId: PROGRAM_ID,
     keys: [
       { pubkey: subscriptionPda, isSigner: false, isWritable: true },
       { pubkey: subscriber, isSigner: true, isWritable: true },
-      { pubkey: merchant, isSigner: true, isWritable: true },
+      { pubkey: merchant, isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ],
     data,
@@ -222,6 +227,7 @@ async function main(): Promise<void> {
   const [subPda] = findSubscriptionPda(
     subscriberKeypair.publicKey,
     merchantKeypair.publicKey,
+    DEFAULT_PLAN_SEED,
   );
   console.log(`\nDelegating subscriber tokens to PDA: ${subPda.toBase58()}`);
   await approve(
@@ -243,12 +249,12 @@ async function main(): Promise<void> {
       merchantKeypair.publicKey,
       AMOUNT,
       INTERVAL,
+      DEFAULT_PLAN_SEED,
     ),
   );
   await sendAndConfirmTransaction(connection, initSubTx, [
     payerKeypair,
     subscriberKeypair,
-    merchantKeypair,
   ]);
   console.log(`  subscription PDA: ${subPda.toBase58()}`);
 

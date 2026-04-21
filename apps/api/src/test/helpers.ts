@@ -43,6 +43,23 @@ process.env["JWT_SECRET"] = TEST_JWT_SECRET;
 process.env["JWT_REFRESH_SECRET"] = TEST_JWT_REFRESH_SECRET;
 process.env["KEEPER_SECRET"] = KEEPER_SECRET;
 
+vi.mock("@recur/config", () => ({
+  env: {
+    NODE_ENV: "test",
+    JWT_SECRET: TEST_JWT_SECRET,
+    JWT_REFRESH_SECRET: TEST_JWT_REFRESH_SECRET,
+    JWT_ACCESS_TTL: "15m",
+    JWT_REFRESH_TTL: "7d",
+    KEEPER_SECRET: KEEPER_SECRET,
+    SOLANA_RPC_URL: "http://127.0.0.1:8899",
+    PROGRAM_ID: "Du86TLvDNSzGf1hkb6cVPoQpHPCwYiRXnGKm3J1GAgFj",
+    USDC_MINT: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+    DATABASE_URL: "postgresql://localhost:5432/recur",
+    PORT: 3001,
+    API_URL: "http://localhost:3001",
+  },
+}));
+
 export async function makeApp(): Promise<Express> {
   const { default: express } = await import("express");
   const { default: cors } = await import("cors");

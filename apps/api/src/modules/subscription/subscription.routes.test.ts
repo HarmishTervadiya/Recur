@@ -66,9 +66,11 @@ describe("subscriber routes", () => {
           planId: "plan1",
           subscriberId: "s1",
           subscriptionPda: "pda123456789012345678901234567890",
-          isActive: true,
+          status: "active",
+          nextPaymentDue: new Date(Date.now() + 2592000000),
           lastPaymentAt: null,
           cancelRequestedAt: null,
+          cancelledAt: null,
           createdAt: NOW,
           updatedAt: NOW,
           plan: {
@@ -79,6 +81,7 @@ describe("subscriber routes", () => {
           },
         },
       ] as any);
+      prismaMock.subscription.count.mockResolvedValue(1);
 
       const res = await request(app)
         .get("/subscriber/subscriptions")
@@ -87,6 +90,7 @@ describe("subscriber routes", () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data).toHaveLength(1);
+      expect(res.body).toHaveProperty("pagination");
     });
   });
 
@@ -102,9 +106,11 @@ describe("subscriber routes", () => {
         planId: "plan1",
         subscriberId: "s1",
         subscriptionPda: "pda123456789012345678901234567890",
-        isActive: true,
+        status: "active",
+        nextPaymentDue: new Date(Date.now() + 2592000000),
         lastPaymentAt: null,
         cancelRequestedAt: null,
+        cancelledAt: null,
         createdAt: NOW,
         updatedAt: NOW,
         plan: { id: "plan1", name: "Pro", amountBaseUnits: BigInt(1000000) },

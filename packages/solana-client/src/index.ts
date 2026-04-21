@@ -8,6 +8,24 @@ export const USDC_MINT_DEVNET = new PublicKey(
   "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
 );
 
+/**
+ * Convert a hex-encoded planSeed string (from DB) to an 8-byte Buffer
+ * suitable for PDA derivation and on-chain instruction args.
+ */
+export function planSeedToBuffer(hexSeed: string): Buffer {
+  const buf = Buffer.from(hexSeed, "hex");
+  if (buf.length !== 8)
+    throw new Error(`planSeed must be 8 bytes (16 hex chars), got ${buf.length}`);
+  return buf;
+}
+
+/**
+ * Convert a planSeed Buffer to the `[u8; 8]` array format expected by Anchor.
+ */
+export function planSeedToArray(hexSeed: string): number[] {
+  return Array.from(planSeedToBuffer(hexSeed));
+}
+
 export function findSubscriptionPda(
   subscriber: PublicKey,
   merchant: PublicKey,

@@ -8,6 +8,45 @@ datasource db {
 }
 
 // ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum SubscriptionStatus {
+  active
+  past_due
+  cancelled
+  expired
+}
+
+enum MerchantTransactionStatus {
+  success
+  failed
+}
+
+enum EventType {
+  subscription_created
+  payment_success
+  payment_failed
+  cancel_requested
+  cancel_finalized
+  cancel_forced
+  delegation_revoked
+}
+
+enum WebhookDeliveryStatus {
+  pending
+  delivered
+  failed
+  abandoned
+}
+
+enum SuperAdminRole {
+  owner
+  admin
+  viewer
+}
+
+// ---------------------------------------------------------------------------
 // Auth
 // ---------------------------------------------------------------------------
 
@@ -26,6 +65,22 @@ model AuthNonce {
   @@map("auth_nonces")
 }
 
+/// Long-lived refresh tokens bound to a wallet session.
+/// Used to rotate short-lived JWTs without re-signing.
+model RefreshToken {
+  id            String    @id @default(cuid())
+  walletAddress String    @map("wallet_address")
+  tokenHash     String    @unique @map("token_hash")
+  family        String    /// rotation family — all tokens in a chain share this
+  expiresAt     DateTime  @map("expires_at")
+  revokedAt     DateTime? @map("revoked_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([walletAddress])
+  @@index([family])
+  @@map("refresh_tokens")
+}
+
 // ---------------------------------------------------------------------------
 // Merchant hierarchy: Merchant → App → Plan
 // ---------------------------------------------------------------------------
@@ -34,10 +89,16 @@ model Merchant {
   id            String   @id @default(cuid())
   walletAddress String   @unique @map("wallet_address")
   name          String?
+  email         String?
+  phone         String?
+  businessName  String?  @map("business_name")
+  businessUrl   String?  @map("business_url")
+  logoUrl       String?  @map("logo_url")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  apps App[]
+  apps    App[]
+  apiKeys ApiKey[]
 
   @@map("merchants")
 }
@@ -52,8 +113,9 @@ model App {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  plans    Plan[]
+  merchant         Merchant          @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  plans            Plan[]
+  webhookEndpoints WebhookEndpoint[]
 
   @@index([merchantId])
   @@map("apps")
@@ -61,11 +123,14 @@ model App {
 
 /// A billing plan within an App. Mirrors on-chain amount + interval and adds
 /// off-chain metadata (name, description, currency label).
+/// `planSeed` is the 8-byte seed used in the on-chain PDA derivation.
 model Plan {
   id              String   @id @default(cuid())
   appId           String   @map("app_id")
   name            String
   description     String?
+  /// 8-byte hex-encoded seed for on-chain PDA derivation.
+  planSeed        String   @map("plan_seed")
   /// Amount in token base units (USDC 6 decimals: $1.00 = 1_000_000).
   amountBaseUnits BigInt   @map("amount_base_units")
   /// Billing interval in seconds, matching the on-chain u64 field.
@@ -84,14 +149,38 @@ model Plan {
 }
 
 // ---------------------------------------------------------------------------
+// API Keys — merchant-scoped server-side auth
+// ---------------------------------------------------------------------------
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  merchantId String    @map("merchant_id")
+  /// First 8 chars of the key, for display ("sk_live_abc1...")
+  prefix     String
+  /// SHA-256 hash of the full key. The raw key is shown once on creation.
+  keyHash    String    @unique @map("key_hash")
+  label      String?
+  lastUsedAt DateTime? @map("last_used_at")
+  revokedAt  DateTime? @map("revoked_at")
+  expiresAt  DateTime? @map("expires_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@map("api_keys")
+}
+
+// ---------------------------------------------------------------------------
 // Subscriber
 // ---------------------------------------------------------------------------
 
-/// A wallet that has created at least one subscription. First-class model so
-/// per-subscriber history can be queried without joining Subscription rows.
+/// A wallet that has created at least one subscription.
 model Subscriber {
   id            String   @id @default(cuid())
   walletAddress String   @unique @map("wallet_address")
+  name          String?
+  email         String?
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
@@ -106,40 +195,37 @@ model Subscriber {
 
 /// Mirrors the on-chain Subscription PDA. Updated by the Keeper after each
 /// on-chain event. `subscriptionPda` is the canonical link to the on-chain
-/// account (seeds: subscription / subscriber / merchant).
+/// account (seeds: subscription / subscriber / merchant / plan_seed).
 model Subscription {
-  id                String    @id @default(cuid())
-  planId            String    @map("plan_id")
-  subscriberId      String    @map("subscriber_id")
+  id                String             @id @default(cuid())
+  planId            String             @map("plan_id")
+  subscriberId      String             @map("subscriber_id")
   /// Base58-encoded on-chain PDA address.
-  subscriptionPda   String    @unique @map("subscription_pda")
-  lastPaymentAt     DateTime? @map("last_payment_at")
-  cancelRequestedAt DateTime? @map("cancel_requested_at")
-  isActive          Boolean   @default(true) @map("is_active")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
+  subscriptionPda   String             @unique @map("subscription_pda")
+  status            SubscriptionStatus @default(active)
+  lastPaymentAt     DateTime?          @map("last_payment_at")
+  /// Precomputed next billing date for efficient keeper queries.
+  nextPaymentDue    DateTime?          @map("next_payment_due")
+  cancelRequestedAt DateTime?          @map("cancel_requested_at")
+  cancelledAt       DateTime?          @map("cancelled_at")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
 
   plan         Plan                  @relation(fields: [planId], references: [id])
   subscriber   Subscriber            @relation(fields: [subscriberId], references: [id])
   transactions MerchantTransaction[]
+  events       SubscriptionEvent[]
 
   @@index([planId])
   @@index([subscriberId])
+  @@index([status])
+  @@index([nextPaymentDue])
   @@map("subscriptions")
 }
 
 // ---------------------------------------------------------------------------
-// MerchantTransaction — one row per on-chain payment event for merchant apps
-//
-// NOTE: A separate InAppTransaction table will be added in a future phase to
-// track Recur's own platform subscription billing. That table is intentionally
-// kept separate from this one.
+// MerchantTransaction — one row per on-chain payment event
 // ---------------------------------------------------------------------------
-
-enum MerchantTransactionStatus {
-  success
-  failed
-}
 
 /// One row per `process_payment` on-chain event for a merchant-app subscription.
 /// Stores gross amount, fee split, and Solana tx signature for auditability.
@@ -152,6 +238,10 @@ model MerchantTransaction {
   platformFee    BigInt                    @map("platform_fee")
   /// Net amount credited to merchant (amountGross − platformFee).
   amountNet      BigInt                    @map("amount_net")
+  /// Subscriber wallet address (for quick lookups without joins).
+  fromWallet     String?                   @map("from_wallet")
+  /// Merchant wallet address (for quick lookups without joins).
+  toWallet       String?                   @map("to_wallet")
   /// Base58 Solana transaction signature. Unique per confirmed payment.
   txSignature    String                    @unique @map("tx_signature")
   status         MerchantTransactionStatus
@@ -160,5 +250,157 @@ model MerchantTransaction {
   subscription Subscription @relation(fields: [subscriptionId], references: [id])
 
   @@index([subscriptionId])
+  @@index([fromWallet])
+  @@index([toWallet])
   @@map("merchant_transactions")
+}
+
+// ---------------------------------------------------------------------------
+// SubscriptionEvent — immutable audit log
+// ---------------------------------------------------------------------------
+
+/// Immutable event log for every lifecycle event on a subscription.
+model SubscriptionEvent {
+  id             String    @id @default(cuid())
+  subscriptionId String    @map("subscription_id")
+  eventType      EventType @map("event_type")
+  /// Solana tx signature (if applicable).
+  txSignature    String?   @map("tx_signature")
+  /// Freeform JSON metadata (amounts, error messages, etc).
+  metadata       Json?
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+
+  @@index([subscriptionId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("subscription_events")
+}
+
+// ---------------------------------------------------------------------------
+// Webhooks — merchant-configured event delivery
+// ---------------------------------------------------------------------------
+
+model WebhookEndpoint {
+  id        String    @id @default(cuid())
+  appId     String    @map("app_id")
+  url       String
+  /// SHA-256 HMAC secret for payload signing. Stored hashed; raw shown once.
+  secret    String
+  /// Which event types to deliver. Empty = all.
+  events    String[]  @default([])
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  app        App               @relation(fields: [appId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([appId])
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id             String                @id @default(cuid())
+  endpointId     String                @map("endpoint_id")
+  eventType      EventType             @map("event_type")
+  /// JSON payload sent.
+  payload        Json
+  status         WebhookDeliveryStatus @default(pending)
+  httpStatusCode Int?                  @map("http_status_code")
+  attempts       Int                   @default(0)
+  lastAttemptAt  DateTime?             @map("last_attempt_at")
+  nextRetryAt    DateTime?             @map("next_retry_at")
+  createdAt      DateTime              @default(now()) @map("created_at")
+
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([endpointId])
+  @@index([status])
+  @@index([nextRetryAt])
+  @@map("webhook_deliveries")
+}
+
+// ---------------------------------------------------------------------------
+// Super Admin & Platform Config
+// ---------------------------------------------------------------------------
+
+model SuperAdmin {
+  id            String         @id @default(cuid())
+  walletAddress String         @unique @map("wallet_address")
+  role          SuperAdminRole @default(admin)
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  @@map("super_admins")
+}
+
+/// Key-value global configuration store.
+model GlobalConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("global_config")
+}
+
+// ---------------------------------------------------------------------------
+// Platform Plans — Recur's own billing for merchants (future)
+// ---------------------------------------------------------------------------
+
+/// Tiered platform plans (free, starter, growth, enterprise) that
+/// determine fee rates, transaction limits, etc.
+model PlatformPlan {
+  id                String   @id @default(cuid())
+  name              String   @unique
+  /// Platform fee in basis points for this tier.
+  feeBps            Int      @map("fee_bps")
+  /// Flat fee per transaction in base units.
+  flatFeeBaseUnits  BigInt   @map("flat_fee_base_units")
+  /// Max monthly transaction volume (0 = unlimited).
+  maxMonthlyVolume  BigInt   @default(0) @map("max_monthly_volume")
+  /// Price per month in base units (0 = free tier).
+  priceBaseUnits    BigInt   @default(0) @map("price_base_units")
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  subscriptions PlatformSubscription[]
+
+  @@map("platform_plans")
+}
+
+/// A merchant's subscription to a Recur platform plan.
+model PlatformSubscription {
+  id             String             @id @default(cuid())
+  merchantId     String             @map("merchant_id")
+  platformPlanId String             @map("platform_plan_id")
+  status         SubscriptionStatus @default(active)
+  currentPeriodStart DateTime       @map("current_period_start")
+  currentPeriodEnd   DateTime       @map("current_period_end")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  platformPlan PlatformPlan          @relation(fields: [platformPlanId], references: [id])
+  transactions PlatformTransaction[]
+
+  @@index([merchantId])
+  @@index([platformPlanId])
+  @@map("platform_subscriptions")
+}
+
+/// Billing transactions for Recur's own platform subscriptions.
+model PlatformTransaction {
+  id                     String   @id @default(cuid())
+  platformSubscriptionId String   @map("platform_subscription_id")
+  amountBaseUnits        BigInt   @map("amount_base_units")
+  txSignature            String?  @unique @map("tx_signature")
+  status                 MerchantTransactionStatus
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  platformSubscription PlatformSubscription @relation(fields: [platformSubscriptionId], references: [id])
+
+  @@index([platformSubscriptionId])
+  @@map("platform_transactions")
 }

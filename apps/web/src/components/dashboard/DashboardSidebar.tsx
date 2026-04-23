@@ -41,12 +41,16 @@ function NavIcon({ icon }: { icon: string }) {
   }
 }
 
-export function DashboardSidebar() {
+interface DashboardSidebarProps {
+  onNavigate?: () => void;
+}
+
+export function DashboardSidebar({ onNavigate }: DashboardSidebarProps) {
   const pathname = usePathname();
   const { walletAddress, signOut } = useAuth();
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-[240px] bg-recur-surface border-r border-recur-border hidden lg:flex flex-col z-40">
+    <aside className="h-screen w-[240px] bg-recur-surface border-r border-recur-border flex flex-col z-50">
       {/* Logo */}
       <div className="flex items-center gap-2 px-5 py-5 border-b border-recur-border">
         <RecurLogoIcon size={24} />
@@ -68,6 +72,7 @@ export function DashboardSidebar() {
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={onNavigate}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-[13px] font-medium transition-all duration-200 ${
                   isActive
                     ? "bg-recur-purple-tint text-recur-light border border-recur-border-light"

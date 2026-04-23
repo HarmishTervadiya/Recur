@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { apiClient } from "../../../lib/api-client";
+import { useToast } from "../../../components/ui/ToastProvider";
 
 interface App {
   id: string;
@@ -20,6 +21,7 @@ export default function AppsListPage() {
   const [createName, setCreateName] = useState("");
   const [createDesc, setCreateDesc] = useState("");
   const [creating, setCreating] = useState(false);
+  const { toast } = useToast();
 
   const fetchApps = useCallback(async () => {
     const res = await apiClient<App[]>("/merchant/apps");
@@ -45,7 +47,10 @@ export default function AppsListPage() {
       setCreateName("");
       setCreateDesc("");
       setShowCreate(false);
+      toast("success", "App created successfully");
       fetchApps();
+    } else {
+      toast("error", res.error?.message ?? "Failed to create app");
     }
     setCreating(false);
   };

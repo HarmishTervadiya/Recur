@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../components/providers/AuthProvider";
 import { DashboardSidebar } from "../../components/dashboard/DashboardSidebar";
+import { RecurLogoIcon } from "../../components/icons/RecurLogoIcon";
 
 export default function DashboardLayout({
   children,
@@ -12,6 +13,7 @@ export default function DashboardLayout({
 }) {
   const { isAuthenticated } = useAuth();
   const router = useRouter();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -31,9 +33,44 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-recur-base flex">
-      <DashboardSidebar />
-      <main className="flex-1 ml-0 lg:ml-[240px] min-h-screen">
-        <div className="max-w-[1000px] mx-auto px-6 py-8">
+      {/* Mobile header */}
+      <header className="fixed top-0 left-0 right-0 h-14 bg-recur-surface border-b border-recur-border flex items-center justify-between px-4 lg:hidden z-50">
+        <div className="flex items-center gap-2">
+          <RecurLogoIcon size={20} />
+          <span className="text-[14px] font-bold text-recur-text-heading">Recur</span>
+        </div>
+        <button
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="p-2 text-recur-text-muted hover:text-recur-text-heading transition-colors"
+          aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+        >
+          {mobileMenuOpen ? (
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          ) : (
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M3 6h14M3 10h14M3 14h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          )}
+        </button>
+      </header>
+
+      {/* Mobile overlay */}
+      {mobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Sidebar — always visible on lg, slide-in on mobile */}
+      <div className={`fixed left-0 top-0 h-screen z-50 transition-transform duration-200 lg:translate-x-0 ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        <DashboardSidebar onNavigate={() => setMobileMenuOpen(false)} />
+      </div>
+
+      <main className="flex-1 ml-0 lg:ml-[240px] min-h-screen pt-14 lg:pt-0">
+        <div className="max-w-[1000px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
           {children}
         </div>
       </main>

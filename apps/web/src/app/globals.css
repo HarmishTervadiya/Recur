@@ -44,6 +44,14 @@
       transform 0.7s cubic-bezier(0.19, 1, 0.22, 1);
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    .section-animate {
+      opacity: 1;
+      transform: none;
+      transition: none;
+    }
+  }
+
   .section-animate.visible {
     opacity: 1;
     transform: translateY(0);
@@ -112,6 +120,12 @@
     animation: marquee 30s linear infinite;
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    .animate-marquee {
+      animation: none;
+    }
+  }
+
   /* Dot grid pattern for hero */
   .dot-grid {
     background-image: radial-gradient(circle, #2a2a3e 1px, transparent 1px);
@@ -164,6 +178,16 @@
     transition:
       opacity 0.15s ease-out,
       transform 0.15s ease-out;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .code-line {
+      opacity: 1;
+      transform: none;
+    }
+    .code-line.typed {
+      transition: none;
+    }
   }
 
   /* Pricing table Recur column highlight */

@@ -9,7 +9,7 @@ interface Plan {
   id: string;
   name: string;
   description: string | null;
-  amountBaseUnits: number;
+  amountBaseUnits: string;
   intervalSeconds: number;
   isActive: boolean;
   planSeed: string;
@@ -26,13 +26,13 @@ interface AppDetail {
 
 interface Transaction {
   id: string;
-  amountBaseUnits: number;
-  feeBaseUnits: number;
-  netBaseUnits: number;
+  amountGross: string;
+  platformFee: string;
+  amountNet: string;
   status: string;
   txSignature: string | null;
-  fromWallet: string;
-  toWallet: string;
+  fromWallet: string | null;
+  toWallet: string | null;
   createdAt: string;
 }
 
@@ -52,8 +52,8 @@ const INTERVAL_OPTIONS = [
 
 type Tab = "plans" | "transactions" | "webhooks";
 
-function formatAmount(baseUnits: number): string {
-  return `$${(baseUnits / 1_000_000).toFixed(2)}`;
+function formatAmount(baseUnits: string | number): string {
+  return `$${(Number(baseUnits) / 1_000_000).toFixed(2)}`;
 }
 
 function formatInterval(seconds: number): string {
@@ -323,10 +323,10 @@ export default function AppDetailPage() {
                   <tbody>
                     {transactions.map((tx, i) => (
                       <tr key={tx.id} className={i < transactions.length - 1 ? "border-b border-recur-card" : ""}>
-                        <td className="px-4 py-3 text-[11px] font-mono text-recur-text-body">{truncateWallet(tx.fromWallet)}</td>
-                        <td className="px-4 py-3 text-[12px] font-mono text-recur-text-heading">{formatAmount(tx.amountBaseUnits)}</td>
-                        <td className="px-4 py-3 text-[12px] font-mono text-recur-text-muted">{formatAmount(tx.feeBaseUnits)}</td>
-                        <td className="px-4 py-3 text-[12px] font-mono text-recur-success font-semibold">{formatAmount(tx.netBaseUnits)}</td>
+                        <td className="px-4 py-3 text-[11px] font-mono text-recur-text-body">{tx.fromWallet ? truncateWallet(tx.fromWallet) : "—"}</td>
+                        <td className="px-4 py-3 text-[12px] font-mono text-recur-text-heading">{formatAmount(tx.amountGross)}</td>
+                        <td className="px-4 py-3 text-[12px] font-mono text-recur-text-muted">{formatAmount(tx.platformFee)}</td>
+                        <td className="px-4 py-3 text-[12px] font-mono text-recur-success font-semibold">{formatAmount(tx.amountNet)}</td>
                         <td className="px-4 py-3">
                           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                             tx.status === "success"

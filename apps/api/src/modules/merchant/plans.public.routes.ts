@@ -9,7 +9,7 @@ const router: ExpressRouter = Router();
 router.get(
   "/:planId",
   wrap(async (req, res) => {
-    const plan = await prisma.plan.findUnique({
+    const plan = await prisma.plan.findFirst({
       where: { id: req.params["planId"], isActive: true },
       include: {
         app: {
@@ -20,7 +20,7 @@ router.get(
       },
     });
     if (!plan) throw new AppError(ErrorCode.PLAN_NOT_FOUND, "Plan not found");
-    ok(res, { ...plan, amountBaseUnits: plan.amountBaseUnits.toString() });
+    ok(res, plan);
   }),
 );
 
@@ -38,13 +38,7 @@ router.get(
       where: { appId, isActive: true },
       orderBy: { createdAt: "asc" },
     });
-    ok(
-      res,
-      plans.map((p) => ({
-        ...p,
-        amountBaseUnits: p.amountBaseUnits.toString(),
-      })),
-    );
+    ok(res, plans);
   }),
 );
 

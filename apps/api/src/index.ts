@@ -3,6 +3,11 @@ import cors from "cors";
 import helmet from "helmet";
 import { createLogger } from "@recur/logger";
 
+// Allow JSON.stringify to serialize BigInt values from Prisma
+(BigInt.prototype as unknown as { toJSON: () => string }).toJSON = function () {
+  return this.toString();
+};
+
 import authRouter from "./modules/auth/auth.routes.js";
 import merchantRouter from "./modules/merchant/merchant.routes.js";
 import plansPublicRouter from "./modules/merchant/plans.public.routes.js";

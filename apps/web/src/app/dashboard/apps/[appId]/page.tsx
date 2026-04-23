@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { apiClient } from "../../../../lib/api-client";
+import { useToast } from "../../../../components/ui/ToastProvider";
 
 interface Plan {
   id: string;
@@ -99,6 +100,7 @@ export default function AppDetailPage() {
   const [webhookUrl, setWebhookUrl] = useState("");
   const [creatingWebhook, setCreatingWebhook] = useState(false);
   const [webhookSecret, setWebhookSecret] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const fetchApp = useCallback(async () => {
     const [appRes, plansRes] = await Promise.all([
@@ -157,7 +159,10 @@ export default function AppDetailPage() {
     if (res.success) {
       setPlanName(""); setPlanDesc(""); setPlanAmount("");
       setShowCreatePlan(false);
+      toast("success", "Plan created successfully");
       fetchApp();
+    } else {
+      toast("error", res.error?.message ?? "Failed to create plan");
     }
     setCreatingPlan(false);
   };
@@ -169,7 +174,8 @@ export default function AppDetailPage() {
       method: "PATCH",
       body: JSON.stringify({ name: editName.trim(), description: editDesc.trim() || undefined }),
     });
-    if (res.success && res.data) { setApp(res.data); setShowEditApp(false); }
+    if (res.success && res.data) { setApp(res.data); setShowEditApp(false); toast("success", "App updated"); }
+    else { toast("error", res.error?.message ?? "Failed to update app"); }
     setSaving(false);
   };
 
@@ -192,13 +198,17 @@ export default function AppDetailPage() {
     if (res.success && res.data) {
       setWebhookSecret(res.data.secret);
       setWebhookUrl("");
+      toast("success", "Webhook endpoint created");
       fetchWebhooks();
+    } else {
+      toast("error", res.error?.message ?? "Failed to create webhook");
     }
     setCreatingWebhook(false);
   };
 
   const handleDeleteWebhook = async (webhookId: string) => {
     await apiClient(`/merchant/apps/${appId}/webhooks/${webhookId}`, { method: "DELETE" });
+    toast("success", "Webhook removed");
     fetchWebhooks();
   };
 
@@ -307,7 +317,7 @@ export default function AppDetailPage() {
             </div>
           ) : (
             <>
-              <div className="bg-recur-surface border border-recur-border rounded-[14px] overflow-hidden">
+              <div className="bg-recur-surface border border-recur-border rounded-[14px] overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-recur-border">

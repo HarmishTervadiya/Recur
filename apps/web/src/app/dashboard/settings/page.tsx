@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { apiClient } from "../../../lib/api-client";
+import { useToast } from "../../../components/ui/ToastProvider";
 
 interface MerchantProfile {
   id: string;
@@ -39,6 +40,7 @@ export default function SettingsPage() {
   const [creatingKey, setCreatingKey] = useState(false);
   const [newKeySecret, setNewKeySecret] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
+  const { toast } = useToast();
 
   const fetchProfile = useCallback(async () => {
     const res = await apiClient<MerchantProfile>("/merchant/me");
@@ -75,7 +77,8 @@ export default function SettingsPage() {
         businessUrl: businessUrl.trim() || undefined,
       }),
     });
-    if (res.success && res.data) setMerchant(res.data);
+    if (res.success && res.data) { setMerchant(res.data); toast("success", "Profile saved"); }
+    else { toast("error", res.error?.message ?? "Failed to save profile"); }
     setSaving(false);
   };
 
@@ -87,13 +90,17 @@ export default function SettingsPage() {
     });
     if (res.success && res.data) {
       setNewKeySecret(res.data.key);
+      toast("success", "API key created — copy it now");
       fetchApiKeys();
+    } else {
+      toast("error", res.error?.message ?? "Failed to create API key");
     }
     setCreatingKey(false);
   };
 
   const handleRevokeKey = async (keyId: string) => {
     await apiClient(`/merchant/api-keys/${keyId}`, { method: "DELETE" });
+    toast("success", "API key revoked");
     fetchApiKeys();
   };
 

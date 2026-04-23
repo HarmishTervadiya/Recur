@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { RecurLogoIcon } from "../icons/RecurLogoIcon";
+import { ConnectWalletButton } from "../ui/ConnectWalletButton";
+import { useAuth } from "../providers/AuthProvider";
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -47,10 +51,16 @@ export function Navbar() {
           >
             FAQ
           </a>
+          {isAuthenticated && (
+            <Link
+              href="/dashboard"
+              className="text-[13px] text-recur-light font-medium hover:text-recur-text-heading hover:bg-recur-card px-4 py-1.5 rounded-full transition-all"
+            >
+              Dashboard
+            </Link>
+          )}
         </div>
-        <button className="btn-primary text-[12px] px-4 py-2">
-          Launch App
-        </button>
+        <ConnectWalletButton />
       </div>
     </nav>
   );

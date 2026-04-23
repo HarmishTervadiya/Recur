@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { WalletProvider } from "../components/providers/WalletProvider";
+import { AuthProvider } from "../components/providers/AuthProvider";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: '--font-inter' });
@@ -14,7 +16,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={`${inter.variable} ${jetbrainsMono.variable}`}>
-        {children}
+        <WalletProvider>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </WalletProvider>
       </body>
     </html>
   );

@@ -75,7 +75,7 @@ router.get(
 
     okPaginated(
       res,
-      subs.map(serializeSubscription),
+      subs,
       { page, pageSize: limit, total, totalPages: Math.ceil(total / limit) },
     );
   }),
@@ -97,7 +97,7 @@ router.get(
         ErrorCode.SUBSCRIPTION_NOT_FOUND,
         "Subscription not found",
       );
-    ok(res, serializeSubscription(sub));
+    ok(res, sub);
   }),
 );
 
@@ -134,7 +134,7 @@ router.post(
       },
       include: { plan: true },
     });
-    ok(res, serializeSubscription(sub), 201);
+    ok(res, sub, 201);
   }),
 );
 
@@ -167,7 +167,7 @@ router.get(
 
     okPaginated(
       res,
-      transactions.map(serializeTx),
+      transactions,
       { page, pageSize: limit, total, totalPages: Math.ceil(total / limit) },
     );
   }),
@@ -182,33 +182,6 @@ async function getSubscriber(walletAddress: string) {
   if (!s)
     throw new AppError(ErrorCode.SUBSCRIBER_NOT_FOUND, "Subscriber not found");
   return s;
-}
-
-function serializeSubscription(sub: Record<string, unknown>) {
-  const plan = sub["plan"] as Record<string, unknown> | undefined;
-  return {
-    ...sub,
-    ...(plan
-      ? {
-          plan: {
-            ...plan,
-            amountBaseUnits: plan["amountBaseUnits"]?.toString(),
-          },
-        }
-      : {}),
-    transactions: Array.isArray(sub["transactions"])
-      ? (sub["transactions"] as Array<Record<string, unknown>>).map(serializeTx)
-      : undefined,
-  };
-}
-
-function serializeTx(tx: Record<string, unknown>) {
-  return {
-    ...tx,
-    amountGross: tx["amountGross"]?.toString(),
-    platformFee: tx["platformFee"]?.toString(),
-    amountNet: tx["amountNet"]?.toString(),
-  };
 }
 
 export default router;

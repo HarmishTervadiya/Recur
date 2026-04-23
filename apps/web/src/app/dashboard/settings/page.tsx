@@ -17,6 +17,8 @@ interface MerchantProfile {
 interface ApiKey {
   id: string;
   prefix: string;
+  label: string | null;
+  lastUsedAt: string | null;
   createdAt: string;
 }
 

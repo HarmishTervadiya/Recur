@@ -137,16 +137,14 @@ router.get(
       where: { appId: req.params["appId"] },
       orderBy: { createdAt: "desc" },
     });
-    ok(res, plans.map(serializePlan));
+    ok(res, plans);
   }),
 );
 
 const CreatePlanBody = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
-  amountBaseUnits: z
-    .string()
-    .regex(/^\d+$/, "Must be a non-negative integer string"),
+  amountBaseUnits: z.number().min(1),
   intervalSeconds: z.number().int().positive(),
   currency: z.string().default("USDC"),
 });
@@ -171,7 +169,7 @@ router.post(
         currency: body.currency,
       },
     });
-    ok(res, serializePlan(plan), 201);
+    ok(res, plan, 201);
   }),
 );
 
@@ -183,7 +181,7 @@ router.get(
       where: { id: req.params["planId"], appId: req.params["appId"] },
     });
     if (!plan) throw new AppError(ErrorCode.PLAN_NOT_FOUND, "Plan not found");
-    ok(res, serializePlan(plan));
+    ok(res, plan);
   }),
 );
 
@@ -202,7 +200,7 @@ router.patch(
       where: { id: req.params["planId"] },
       data,
     });
-    ok(res, serializePlan(plan));
+    ok(res, plan);
   }),
 );
 
@@ -215,7 +213,9 @@ router.get(
   wrap(async (req, res) => {
     await getOwnedApp(req.user!.walletAddress, req.params["appId"]!);
 
-    const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>);
+    const { page, limit, skip } = parsePagination(
+      req.query as Record<string, unknown>,
+    );
 
     const [transactions, total] = await Promise.all([
       prisma.merchantTransaction.findMany({
@@ -230,11 +230,12 @@ router.get(
       }),
     ]);
 
-    okPaginated(
-      res,
-      transactions.map(serializeTransaction),
-      { page, pageSize: limit, total, totalPages: Math.ceil(total / limit) },
-    );
+    okPaginated(res, transactions, {
+      page,
+      pageSize: limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    });
   }),
 );
 
@@ -264,7 +265,7 @@ router.post(
     });
 
     // Return the raw secret once — it's stored hashed.
-    ok(res, { ...endpoint, signingSecret: rawSecret }, 201);
+    ok(res, { ...endpoint, secret: rawSecret }, 201);
   }),
 );
 
@@ -277,7 +278,10 @@ router.get(
       orderBy: { createdAt: "desc" },
     });
     // Strip secret hash from response
-    ok(res, endpoints.map(({ secret, ...e }) => e));
+    ok(
+      res,
+      endpoints.map(({ secret, ...e }) => e),
+    );
   }),
 );
 
@@ -289,7 +293,10 @@ router.delete(
       where: { id: req.params["webhookId"], appId: req.params["appId"] },
     });
     if (!endpoint)
-      throw new AppError(ErrorCode.WEBHOOK_NOT_FOUND, "Webhook endpoint not found");
+      throw new AppError(
+        ErrorCode.WEBHOOK_NOT_FOUND,
+        "Webhook endpoint not found",
+      );
     await prisma.webhookEndpoint.delete({ where: { id: endpoint.id } });
     res.status(204).send();
   }),
@@ -320,7 +327,16 @@ router.post(
     });
 
     // Return the raw key once.
-    ok(res, { id: apiKey.id, key: rawKey, prefix: apiKey.prefix, label: apiKey.label }, 201);
+    ok(
+      res,
+      {
+        id: apiKey.id,
+        key: rawKey,
+        prefix: apiKey.prefix,
+        label: apiKey.label,
+      },
+      201,
+    );
   }),
 );
 
@@ -331,7 +347,13 @@ router.get(
     const keys = await prisma.apiKey.findMany({
       where: { merchantId: merchant.id, revokedAt: null },
       orderBy: { createdAt: "desc" },
-      select: { id: true, prefix: true, label: true, lastUsedAt: true, createdAt: true },
+      select: {
+        id: true,
+        prefix: true,
+        label: true,
+        lastUsedAt: true,
+        createdAt: true,
+      },
     });
     ok(res, keys);
   }),
@@ -342,7 +364,11 @@ router.delete(
   wrap(async (req, res) => {
     const merchant = await getMerchant(req.user!.walletAddress);
     const key = await prisma.apiKey.findFirst({
-      where: { id: req.params["keyId"], merchantId: merchant.id, revokedAt: null },
+      where: {
+        id: req.params["keyId"],
+        merchantId: merchant.id,
+        revokedAt: null,
+      },
     });
     if (!key)
       throw new AppError(ErrorCode.API_KEY_NOT_FOUND, "API key not found");
@@ -375,38 +401,6 @@ async function getOwnedApp(walletAddress: string, appId: string) {
   });
   if (!app) throw new AppError(ErrorCode.APP_NOT_FOUND, "App not found");
   return app;
-}
-
-function serializePlan(plan: {
-  amountBaseUnits: bigint;
-  [key: string]: unknown;
-}) {
-  return { ...plan, amountBaseUnits: plan.amountBaseUnits.toString() };
-}
-
-function serializeTransaction(tx: {
-  amountGross: bigint;
-  platformFee: bigint;
-  amountNet: bigint;
-  subscription?: { plan?: { amountBaseUnits?: bigint; [k: string]: unknown }; [k: string]: unknown };
-  [key: string]: unknown;
-}) {
-  const result: Record<string, unknown> = {
-    ...tx,
-    amountGross: tx.amountGross.toString(),
-    platformFee: tx.platformFee.toString(),
-    amountNet: tx.amountNet.toString(),
-  };
-  if (tx.subscription?.plan) {
-    result["subscription"] = {
-      ...tx.subscription,
-      plan: {
-        ...tx.subscription.plan,
-        amountBaseUnits: tx.subscription.plan.amountBaseUnits?.toString(),
-      },
-    };
-  }
-  return result;
 }
 
 export default router;

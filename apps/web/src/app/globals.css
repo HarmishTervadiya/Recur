@@ -2,9 +2,40 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme CSS Variables ─────────────────────────────────────────────────── */
+
+:root,
+.dark {
+  --recur-base: #08080f;
+  --recur-surface: #0d0d14;
+  --recur-card: #12121c;
+  --recur-purple-tint: #1e1535;
+  --recur-border: #2a2a3e;
+  --recur-border-light: #3d2d70;
+  --recur-text-heading: #f8f8ff;
+  --recur-text-subheading: #c4c4d4;
+  --recur-text-body: #8b8ba7;
+  --recur-text-muted: #6b6b8a;
+  --recur-text-dim: #4b4b6b;
+}
+
+.light {
+  --recur-base: #f5f4ff;
+  --recur-surface: #ffffff;
+  --recur-card: #eeedf8;
+  --recur-purple-tint: #ede9fe;
+  --recur-border: #ddd9f5;
+  --recur-border-light: #c4b5fd;
+  --recur-text-heading: #1a1333;
+  --recur-text-subheading: #3b3060;
+  --recur-text-body: #4b4780;
+  --recur-text-muted: #6b6b8a;
+  --recur-text-dim: #9896b5;
+}
+
 @layer base {
   body {
-    @apply bg-recur-base text-recur-text-body font-sans antialiased;
+    @apply bg-recur-base text-recur-text-body font-sans antialiased transition-colors duration-200;
   }
 
   h1,
@@ -24,14 +55,14 @@
     width: 6px;
   }
   ::-webkit-scrollbar-track {
-    background: #08080f;
+    background: var(--recur-base);
   }
   ::-webkit-scrollbar-thumb {
-    background: #2a2a3e;
+    background: var(--recur-border);
     border-radius: 3px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #3d2d70;
+    background: var(--recur-border-light);
   }
 }
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { RecurLogoIcon } from "../icons/RecurLogoIcon";
 import { ConnectWalletButton } from "../ui/ConnectWalletButton";
+import { ThemeToggle } from "../ui/ThemeToggle";
 import { useAuth } from "../providers/AuthProvider";
 
 export function Navbar() {
@@ -60,7 +61,10 @@ export function Navbar() {
             </Link>
           )}
         </div>
-        <ConnectWalletButton />
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <ConnectWalletButton />
+        </div>
       </div>
     </nav>
   );

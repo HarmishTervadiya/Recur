@@ -1,16 +1,17 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
+  darkMode: "class",
   theme: {
     extend: {
       colors: {
         recur: {
-          base: "#08080F",
-          surface: "#0D0D14",
-          card: "#12121C",
-          "purple-tint": "#1E1535",
-          border: "#2A2A3E",
-          "border-light": "#3D2D70",
+          base: "var(--recur-base)",
+          surface: "var(--recur-surface)",
+          card: "var(--recur-card)",
+          "purple-tint": "var(--recur-purple-tint)",
+          border: "var(--recur-border)",
+          "border-light": "var(--recur-border-light)",
 
           "deep-purple": "#4C1D95",
           primary: "#7C3AED",
@@ -24,11 +25,11 @@ module.exports = {
           sgreen: "#14F195",
           spurple: "#9945FF",
 
-          "text-heading": "#F8F8FF",
-          "text-subheading": "#C4C4D4",
-          "text-body": "#8B8BA7",
-          "text-muted": "#6B6B8A",
-          "text-dim": "#4B4B6B",
+          "text-heading": "var(--recur-text-heading)",
+          "text-subheading": "var(--recur-text-subheading)",
+          "text-body": "var(--recur-text-body)",
+          "text-muted": "var(--recur-text-muted)",
+          "text-dim": "var(--recur-text-dim)",
         },
       },
       fontFamily: {

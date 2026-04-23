@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useEffect, useState, useCallback } from "react";
 import { apiClient } from "../../../lib/api-client";
 import { useToast } from "../../../components/ui/ToastProvider";
@@ -40,6 +42,8 @@ export default function SettingsPage() {
   const [creatingKey, setCreatingKey] = useState(false);
   const [newKeySecret, setNewKeySecret] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
+  const [emailError, setEmailError] = useState("");
+  const [businessUrlError, setBusinessUrlError] = useState("");
   const { toast } = useToast();
 
   const fetchProfile = useCallback(async () => {
@@ -66,6 +70,16 @@ export default function SettingsPage() {
   }, [fetchProfile, fetchApiKeys]);
 
   const handleSaveProfile = async () => {
+    setEmailError("");
+    setBusinessUrlError("");
+    let valid = true;
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setEmailError("Enter a valid email address"); valid = false;
+    }
+    if (businessUrl.trim()) {
+      try { new URL(businessUrl.trim()); } catch { setBusinessUrlError("Must be a valid URL (e.g. https://...)"); valid = false; }
+    }
+    if (!valid) return;
     setSaving(true);
     const res = await apiClient<MerchantProfile>("/merchant/me", {
       method: "PATCH",
@@ -139,8 +153,9 @@ export default function SettingsPage() {
           </div>
           <div>
             <label className="block text-[11px] font-semibold text-recur-text-muted uppercase tracking-wider mb-1.5">Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com"
-              className="w-full px-4 py-2.5 text-[13px] bg-recur-base border border-recur-border rounded-[10px] text-recur-text-heading placeholder:text-recur-text-dim focus:outline-none focus:border-recur-primary transition-colors" />
+            <input type="email" value={email} onChange={(e) => { setEmail(e.target.value); if (emailError) setEmailError(""); }} placeholder="you@example.com"
+              className={`w-full px-4 py-2.5 text-[13px] bg-recur-base border rounded-[10px] text-recur-text-heading placeholder:text-recur-text-dim focus:outline-none transition-colors ${emailError ? "border-recur-error" : "border-recur-border focus:border-recur-primary"}`} />
+            {emailError && <p className="text-[11px] text-recur-error mt-1">{emailError}</p>}
           </div>
           <div>
             <label className="block text-[11px] font-semibold text-recur-text-muted uppercase tracking-wider mb-1.5">Phone</label>
@@ -154,8 +169,9 @@ export default function SettingsPage() {
           </div>
           <div className="md:col-span-2">
             <label className="block text-[11px] font-semibold text-recur-text-muted uppercase tracking-wider mb-1.5">Business URL</label>
-            <input type="url" value={businessUrl} onChange={(e) => setBusinessUrl(e.target.value)} placeholder="https://your-business.com"
-              className="w-full px-4 py-2.5 text-[13px] bg-recur-base border border-recur-border rounded-[10px] text-recur-text-heading placeholder:text-recur-text-dim focus:outline-none focus:border-recur-primary transition-colors font-mono" />
+            <input type="url" value={businessUrl} onChange={(e) => { setBusinessUrl(e.target.value); if (businessUrlError) setBusinessUrlError(""); }} placeholder="https://your-business.com"
+              className={`w-full px-4 py-2.5 text-[13px] bg-recur-base border rounded-[10px] text-recur-text-heading placeholder:text-recur-text-dim focus:outline-none transition-colors font-mono ${businessUrlError ? "border-recur-error" : "border-recur-border focus:border-recur-primary"}`} />
+            {businessUrlError && <p className="text-[11px] text-recur-error mt-1">{businessUrlError}</p>}
           </div>
         </div>
         <div className="mt-6">

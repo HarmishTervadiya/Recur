@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { WalletProvider } from "../components/providers/WalletProvider";
 import { AuthProvider } from "../components/providers/AuthProvider";
+import { ThemeProvider } from "../components/providers/ThemeProvider";
 import { ToastProvider } from "../components/ui/ToastProvider";
 import { ErrorBoundary } from "../components/ui/ErrorBoundary";
 import { ScrollAnimator } from "../components/ui/ScrollAnimator";
@@ -21,12 +22,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${inter.variable} ${jetbrainsMono.variable}`}>
         <WalletProvider>
           <AuthProvider>
-            <ToastProvider>
-              <ErrorBoundary>
-                <ScrollAnimator />
-                {children}
-              </ErrorBoundary>
-            </ToastProvider>
+            <ThemeProvider>
+              <ToastProvider>
+                <ErrorBoundary>
+                  <ScrollAnimator />
+                  {children}
+                </ErrorBoundary>
+              </ToastProvider>
+            </ThemeProvider>
           </AuthProvider>
         </WalletProvider>
       </body>

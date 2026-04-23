@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -102,6 +104,12 @@ export default function AppDetailPage() {
   const [webhookSecret, setWebhookSecret] = useState<string | null>(null);
   const { toast } = useToast();
 
+  // Validation errors
+  const [planNameError, setPlanNameError] = useState("");
+  const [planAmountError, setPlanAmountError] = useState("");
+  const [editNameError, setEditNameError] = useState("");
+  const [webhookUrlError, setWebhookUrlError] = useState("");
+
   const fetchApp = useCallback(async () => {
     const [appRes, plansRes] = await Promise.all([
       apiClient<AppDetail>(`/merchant/apps/${appId}`),
@@ -144,8 +152,13 @@ export default function AppDetailPage() {
   }, [activeTab, fetchTransactions, fetchWebhooks]);
 
   const handleCreatePlan = async () => {
+    setPlanNameError("");
+    setPlanAmountError("");
     const amountUsd = parseFloat(planAmount);
-    if (!planName.trim() || isNaN(amountUsd) || amountUsd < 1) return;
+    let valid = true;
+    if (!planName.trim()) { setPlanNameError("Plan name is required"); valid = false; }
+    if (!planAmount || isNaN(amountUsd) || amountUsd < 1) { setPlanAmountError("Amount must be at least $1.00"); valid = false; }
+    if (!valid) return;
     setCreatingPlan(true);
     const res = await apiClient<Plan>(`/merchant/apps/${appId}/plans`, {
       method: "POST",
@@ -158,6 +171,7 @@ export default function AppDetailPage() {
     });
     if (res.success) {
       setPlanName(""); setPlanDesc(""); setPlanAmount("");
+      setPlanNameError(""); setPlanAmountError("");
       setShowCreatePlan(false);
       toast("success", "Plan created successfully");
       fetchApp();
@@ -168,7 +182,8 @@ export default function AppDetailPage() {
   };
 
   const handleEditApp = async () => {
-    if (!editName.trim()) return;
+    setEditNameError("");
+    if (!editName.trim()) { setEditNameError("App name is required"); return; }
     setSaving(true);
     const res = await apiClient<AppDetail>(`/merchant/apps/${appId}`, {
       method: "PATCH",
@@ -189,7 +204,9 @@ export default function AppDetailPage() {
   };
 
   const handleCreateWebhook = async () => {
-    if (!webhookUrl.trim()) return;
+    setWebhookUrlError("");
+    if (!webhookUrl.trim()) { setWebhookUrlError("Endpoint URL is required"); return; }
+    try { new URL(webhookUrl.trim()); } catch { setWebhookUrlError("Must be a valid URL (e.g. https://...)"); return; }
     setCreatingWebhook(true);
     const res = await apiClient<{ id: string; url: string; secret: string }>(
       `/merchant/apps/${appId}/webhooks`,
@@ -198,6 +215,7 @@ export default function AppDetailPage() {
     if (res.success && res.data) {
       setWebhookSecret(res.data.secret);
       setWebhookUrl("");
+      setWebhookUrlError("");
       toast("success", "Webhook endpoint created");
       fetchWebhooks();
     } else {
@@ -453,13 +471,15 @@ export default function AppDetailPage() {
             <div className="space-y-4">
               <div>
                 <label className="block text-[11px] font-semibold text-recur-text-muted uppercase tracking-wider mb-1.5">Plan Name</label>
-                <input type="text" value={planName} onChange={(e) => setPlanName(e.target.value)} placeholder="Premium Monthly"
-                  className="w-full px-4 py-2.5 text-[13px] bg-recur-base border border-recur-border rounded-[10px] text-recur-text-heading placeholder:text-recur-text-dim focus:outline-none focus:border-recur-primary transition-colors" />
+                <input type="text" value={planName} onChange={(e) => { setPlanName(e.target.value); if (planNameError) setPlanNameError(""); }} placeholder="Premium Monthly"
+                  className={`w-full px-4 py-2.5 text-[13px] bg-recur-base border rounded-[10px] text-recur-text-heading placeholder:text-recur-text-dim focus:outline-none transition-colors ${planNameError ? "border-recur-error" : "border-recur-border focus:border-recur-primary"}`} />
+                {planNameError && <p className="text-[11px] text-recur-error mt-1">{planNameError}</p>}
               </div>
               <div>
                 <label className="block text-[11px] font-semibold text-recur-text-muted uppercase tracking-wider mb-1.5">Amount (USDC)</label>
-                <input type="number" value={planAmount} onChange={(e) => setPlanAmount(e.target.value)} placeholder="5.00" min="1" step="0.01"
-                  className="w-full px-4 py-2.5 text-[13px] bg-recur-base border border-recur-border rounded-[10px] text-recur-text-heading placeholder:text-recur-text-dim focus:outline-none focus:border-recur-primary transition-colors font-mono" />
+                <input type="number" value={planAmount} onChange={(e) => { setPlanAmount(e.target.value); if (planAmountError) setPlanAmountError(""); }} placeholder="5.00" min="1" step="0.01"
+                  className={`w-full px-4 py-2.5 text-[13px] bg-recur-base border rounded-[10px] text-recur-text-heading placeholder:text-recur-text-dim focus:outline-none transition-colors font-mono ${planAmountError ? "border-recur-error" : "border-recur-border focus:border-recur-primary"}`} />
+                {planAmountError && <p className="text-[11px] text-recur-error mt-1">{planAmountError}</p>}
               </div>
               <div>
                 <label className="block text-[11px] font-semibold text-recur-text-muted uppercase tracking-wider mb-1.5">Billing Interval</label>
@@ -496,8 +516,9 @@ export default function AppDetailPage() {
             <div className="space-y-4">
               <div>
                 <label className="block text-[11px] font-semibold text-recur-text-muted uppercase tracking-wider mb-1.5">App Name</label>
-                <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)}
-                  className="w-full px-4 py-2.5 text-[13px] bg-recur-base border border-recur-border rounded-[10px] text-recur-text-heading focus:outline-none focus:border-recur-primary transition-colors" />
+                <input type="text" value={editName} onChange={(e) => { setEditName(e.target.value); if (editNameError) setEditNameError(""); }}
+                  className={`w-full px-4 py-2.5 text-[13px] bg-recur-base border rounded-[10px] text-recur-text-heading focus:outline-none transition-colors ${editNameError ? "border-recur-error" : "border-recur-border focus:border-recur-primary"}`} />
+                {editNameError && <p className="text-[11px] text-recur-error mt-1">{editNameError}</p>}
               </div>
               <div>
                 <label className="block text-[11px] font-semibold text-recur-text-muted uppercase tracking-wider mb-1.5">Description</label>
@@ -522,8 +543,9 @@ export default function AppDetailPage() {
             <h2 className="text-[18px] font-bold text-recur-text-heading mb-4">Add Webhook Endpoint</h2>
             <div>
               <label className="block text-[11px] font-semibold text-recur-text-muted uppercase tracking-wider mb-1.5">Endpoint URL</label>
-              <input type="url" value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)} placeholder="https://your-api.com/webhooks/recur"
-                className="w-full px-4 py-2.5 text-[13px] bg-recur-base border border-recur-border rounded-[10px] text-recur-text-heading placeholder:text-recur-text-dim focus:outline-none focus:border-recur-primary transition-colors font-mono" />
+              <input type="url" value={webhookUrl} onChange={(e) => { setWebhookUrl(e.target.value); if (webhookUrlError) setWebhookUrlError(""); }} placeholder="https://your-api.com/webhooks/recur"
+                className={`w-full px-4 py-2.5 text-[13px] bg-recur-base border rounded-[10px] text-recur-text-heading placeholder:text-recur-text-dim focus:outline-none transition-colors font-mono ${webhookUrlError ? "border-recur-error" : "border-recur-border focus:border-recur-primary"}`} />
+              {webhookUrlError && <p className="text-[11px] text-recur-error mt-1">{webhookUrlError}</p>}
             </div>
             <div className="flex gap-3 mt-6">
               <button onClick={handleCreateWebhook} disabled={creatingWebhook || !webhookUrl.trim()} className="btn-primary text-[13px] px-5 py-2 disabled:opacity-50">

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { RecurLogoIcon } from "../icons/RecurLogoIcon";
 import { useAuth } from "../providers/AuthProvider";
+import { ThemeToggle } from "../ui/ThemeToggle";
 
 const NAV_ITEMS = [
   { label: "Overview", href: "/dashboard", icon: "grid" },
@@ -52,11 +53,12 @@ export function DashboardSidebar({ onNavigate }: DashboardSidebarProps) {
   return (
     <aside className="h-screen w-[240px] bg-recur-surface border-r border-recur-border flex flex-col z-50">
       {/* Logo */}
-      <div className="flex items-center gap-2 px-5 py-5 border-b border-recur-border">
-        <RecurLogoIcon size={24} />
-        <span className="text-[15px] font-bold text-recur-text-heading">
-          Recur
-        </span>
+      <div className="flex items-center justify-between px-5 py-5 border-b border-recur-border">
+        <div className="flex items-center gap-2">
+          <RecurLogoIcon size={24} />
+          <span className="text-[15px] font-bold text-recur-text-heading">Recur</span>
+        </div>
+        <ThemeToggle />
       </div>
 
       {/* Nav */}

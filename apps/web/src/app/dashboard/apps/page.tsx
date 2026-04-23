@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { apiClient } from "../../../lib/api-client";
@@ -21,6 +23,7 @@ export default function AppsListPage() {
   const [createName, setCreateName] = useState("");
   const [createDesc, setCreateDesc] = useState("");
   const [creating, setCreating] = useState(false);
+  const [nameError, setNameError] = useState("");
   const { toast } = useToast();
 
   const fetchApps = useCallback(async () => {
@@ -34,7 +37,15 @@ export default function AppsListPage() {
   }, [fetchApps]);
 
   const handleCreate = async () => {
-    if (!createName.trim()) return;
+    setNameError("");
+    if (!createName.trim()) {
+      setNameError("App name is required");
+      return;
+    }
+    if (createName.trim().length > 100) {
+      setNameError("App name must be 100 characters or less");
+      return;
+    }
     setCreating(true);
     const res = await apiClient<App>("/merchant/apps", {
       method: "POST",
@@ -46,6 +57,7 @@ export default function AppsListPage() {
     if (res.success) {
       setCreateName("");
       setCreateDesc("");
+      setNameError("");
       setShowCreate(false);
       toast("success", "App created successfully");
       fetchApps();
@@ -100,10 +112,13 @@ export default function AppsListPage() {
                 <input
                   type="text"
                   value={createName}
-                  onChange={(e) => setCreateName(e.target.value)}
+                  onChange={(e) => { setCreateName(e.target.value); if (nameError) setNameError(""); }}
                   placeholder="My SaaS Product"
-                  className="w-full px-4 py-2.5 text-[13px] bg-recur-base border border-recur-border rounded-[10px] text-recur-text-heading placeholder:text-recur-text-dim focus:outline-none focus:border-recur-primary transition-colors"
+                  className={`w-full px-4 py-2.5 text-[13px] bg-recur-base border rounded-[10px] text-recur-text-heading placeholder:text-recur-text-dim focus:outline-none transition-colors ${nameError ? "border-recur-error focus:border-recur-error" : "border-recur-border focus:border-recur-primary"}`}
                 />
+                {nameError && (
+                  <p className="text-[11px] text-recur-error mt-1">{nameError}</p>
+                )}
               </div>
               <div>
                 <label className="block text-[11px] font-semibold text-recur-text-muted uppercase tracking-wider mb-1.5">

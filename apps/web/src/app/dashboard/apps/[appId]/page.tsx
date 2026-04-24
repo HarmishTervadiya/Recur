@@ -426,11 +426,19 @@ export default function AppDetailPage() {
       {activeTab === "webhooks" && (
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-[15px] font-bold text-recur-text-heading">Webhooks</h2>
-            <button onClick={() => { setShowCreateWebhook(true); setWebhookSecret(null); }} className="btn-primary text-[12px] px-3 py-1.5">
-              Add Endpoint
-            </button>
+            <h2 className="text-[15px] font-bold text-recur-text-heading">Webhook Endpoint</h2>
+            {webhooks.length === 0 && (
+              <button onClick={() => { setShowCreateWebhook(true); setWebhookSecret(null); }} className="btn-primary text-[12px] px-3 py-1.5">
+                Add Endpoint
+              </button>
+            )}
           </div>
+
+          {webhooks.length > 0 && (
+            <p className="text-[11px] text-recur-text-dim mb-3">
+              One webhook endpoint per app. Remove the existing one to set a different URL.
+            </p>
+          )}
 
           {webhookSecret && (
             <div className="dark-card border-recur-warning/30 mb-4">
@@ -445,9 +453,9 @@ export default function AppDetailPage() {
 
           {webhooks.length === 0 && !showCreateWebhook ? (
             <div className="dark-card text-center py-12">
-              <p className="text-recur-text-muted text-[13px] mb-4">No webhook endpoints configured.</p>
+              <p className="text-recur-text-muted text-[13px] mb-4">No webhook endpoint configured.</p>
               <button onClick={() => setShowCreateWebhook(true)} className="btn-primary text-[13px] px-4 py-2">
-                Add First Endpoint
+                Add Endpoint
               </button>
             </div>
           ) : (

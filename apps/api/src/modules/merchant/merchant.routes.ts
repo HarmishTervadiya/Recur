@@ -258,6 +258,18 @@ router.post(
   wrap(async (req, res) => {
     await getOwnedApp(req.user!.walletAddress, req.params["appId"]!);
     const body = CreateWebhookBody.parse(req.body);
+
+    // Limit: 1 webhook endpoint per app
+    const existing = await prisma.webhookEndpoint.count({
+      where: { appId: req.params["appId"]!, isActive: true },
+    });
+    if (existing >= 1) {
+      throw new AppError(
+        ErrorCode.VALIDATION_ERROR,
+        "Only one active webhook endpoint is allowed per app. Delete the existing one before adding a new one.",
+      );
+    }
+
     const rawSecret = crypto.randomBytes(32).toString("hex");
 
     const endpoint = await prisma.webhookEndpoint.create({

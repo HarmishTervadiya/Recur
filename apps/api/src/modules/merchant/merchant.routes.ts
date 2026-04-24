@@ -20,7 +20,12 @@ router.get(
   wrap(async (req, res) => {
     const merchant = await prisma.merchant.findUnique({
       where: { walletAddress: req.user!.walletAddress },
-      include: { apps: { orderBy: { createdAt: "desc" } } },
+      include: {
+        apps: {
+          orderBy: { createdAt: "desc" },
+          include: { _count: { select: { plans: true } } },
+        },
+      },
     });
     if (!merchant)
       throw new AppError(ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");

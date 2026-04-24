@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { apiClient } from "../../../lib/api-client";
+import { apiClient, parseFieldErrors } from "../../../lib/api-client";
 import { useToast } from "../../../components/ui/ToastProvider";
 
 interface App {
@@ -22,6 +22,7 @@ export default function AppsListPage() {
   const [createDesc, setCreateDesc] = useState("");
   const [creating, setCreating] = useState(false);
   const [nameError, setNameError] = useState("");
+  const [descError, setDescError] = useState("");
   const { toast } = useToast();
 
   const fetchApps = useCallback(async () => {
@@ -36,6 +37,7 @@ export default function AppsListPage() {
 
   const handleCreate = async () => {
     setNameError("");
+    setDescError("");
     if (!createName.trim()) {
       setNameError("App name is required");
       return;
@@ -56,11 +58,16 @@ export default function AppsListPage() {
       setCreateName("");
       setCreateDesc("");
       setNameError("");
+      setDescError("");
       setShowCreate(false);
       toast("success", "App created successfully");
       fetchApps();
     } else {
-      toast("error", res.error?.message ?? "Failed to create app");
+      const { fieldErrors, fallbackMessage } = parseFieldErrors(res, ["name", "description"]);
+      if (fieldErrors.name) setNameError(fieldErrors.name);
+      if (fieldErrors.description) setDescError(fieldErrors.description);
+      if (fallbackMessage) toast("error", fallbackMessage);
+      else if (!fieldErrors.name && !fieldErrors.description) toast("error", res.error?.message ?? "Failed to create app");
     }
     setCreating(false);
   };
@@ -125,10 +132,13 @@ export default function AppsListPage() {
                 <input
                   type="text"
                   value={createDesc}
-                  onChange={(e) => setCreateDesc(e.target.value)}
+                  onChange={(e) => { setCreateDesc(e.target.value); if (descError) setDescError(""); }}
                   placeholder="Brief description"
-                  className="w-full px-4 py-2.5 text-[13px] bg-recur-base border border-recur-border rounded-[10px] text-recur-text-heading placeholder:text-recur-text-dim focus:outline-none focus:border-recur-primary transition-colors"
+                  className={`w-full px-4 py-2.5 text-[13px] bg-recur-base border rounded-[10px] text-recur-text-heading placeholder:text-recur-text-dim focus:outline-none transition-colors ${descError ? "border-recur-error focus:border-recur-error" : "border-recur-border focus:border-recur-primary"}`}
                 />
+                {descError && (
+                  <p className="text-[11px] text-recur-error mt-1">{descError}</p>
+                )}
               </div>
             </div>
             <div className="flex gap-3 mt-6">

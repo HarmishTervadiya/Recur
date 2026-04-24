@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { apiClient } from "../../../../lib/api-client";
+import { apiClient, parseFieldErrors } from "../../../../lib/api-client";
 import { useToast } from "../../../../components/ui/ToastProvider";
 
 interface Plan {
@@ -174,7 +174,11 @@ export default function AppDetailPage() {
       toast("success", "Plan created successfully");
       fetchApp();
     } else {
-      toast("error", res.error?.message ?? "Failed to create plan");
+      const { fieldErrors, fallbackMessage } = parseFieldErrors(res, ["name", "amountBaseUnits", "intervalSeconds", "description"]);
+      if (fieldErrors.name) setPlanNameError(fieldErrors.name);
+      if (fieldErrors.amountBaseUnits) setPlanAmountError(fieldErrors.amountBaseUnits);
+      if (fallbackMessage) toast("error", fallbackMessage);
+      else if (!fieldErrors.name && !fieldErrors.amountBaseUnits) toast("error", res.error?.message ?? "Failed to create plan");
     }
     setCreatingPlan(false);
   };
@@ -188,7 +192,12 @@ export default function AppDetailPage() {
       body: JSON.stringify({ name: editName.trim(), description: editDesc.trim() || undefined }),
     });
     if (res.success && res.data) { setApp(res.data); setShowEditApp(false); toast("success", "App updated"); }
-    else { toast("error", res.error?.message ?? "Failed to update app"); }
+    else {
+      const { fieldErrors, fallbackMessage } = parseFieldErrors(res, ["name", "description"]);
+      if (fieldErrors.name) setEditNameError(fieldErrors.name);
+      if (fallbackMessage) toast("error", fallbackMessage);
+      else if (!fieldErrors.name) toast("error", res.error?.message ?? "Failed to update app");
+    }
     setSaving(false);
   };
 
@@ -217,7 +226,10 @@ export default function AppDetailPage() {
       toast("success", "Webhook endpoint created");
       fetchWebhooks();
     } else {
-      toast("error", res.error?.message ?? "Failed to create webhook");
+      const { fieldErrors, fallbackMessage } = parseFieldErrors(res, ["url"]);
+      if (fieldErrors.url) setWebhookUrlError(fieldErrors.url);
+      if (fallbackMessage) toast("error", fallbackMessage);
+      else if (!fieldErrors.url) toast("error", res.error?.message ?? "Failed to create webhook");
     }
     setCreatingWebhook(false);
   };

@@ -2,9 +2,14 @@ import type { Response } from "express";
 import type { ApiSuccess, ApiFailure, PaginationMeta } from "../errors.js";
 import { type ErrorCode, ERROR_HTTP_STATUS } from "../errors.js";
 
+/** Convert BigInt values to strings for JSON serialization. */
+function serializeBigInt(_key: string, value: unknown): unknown {
+  return typeof value === "bigint" ? value.toString() : value;
+}
+
 export function ok<T>(res: Response, data: T, status = 200): void {
   const body: ApiSuccess<T> = { success: true, data, error: null };
-  res.status(status).json(body);
+  res.status(status).type("json").send(JSON.stringify(body, serializeBigInt));
 }
 
 export function okPaginated<T>(
@@ -14,7 +19,7 @@ export function okPaginated<T>(
   status = 200,
 ): void {
   const body: ApiSuccess<T> = { success: true, data, pagination, error: null };
-  res.status(status).json(body);
+  res.status(status).type("json").send(JSON.stringify(body, serializeBigInt));
 }
 
 export function fail(

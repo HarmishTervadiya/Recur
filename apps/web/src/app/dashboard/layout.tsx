@@ -11,17 +11,17 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isAuthLoading } = useAuth();
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthLoading && !isAuthenticated) {
       router.push("/");
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, isAuthLoading, router]);
 
-  if (!isAuthenticated) {
+  if (isAuthLoading || !isAuthenticated) {
     return (
       <div className="min-h-screen bg-recur-base flex items-center justify-center">
         <div className="animate-pulse text-recur-text-muted text-[13px]">

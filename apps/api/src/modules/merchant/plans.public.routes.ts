@@ -7,24 +7,6 @@ import { ErrorCode } from "../../errors.js";
 const router: ExpressRouter = Router();
 
 router.get(
-  "/:planId",
-  wrap(async (req, res) => {
-    const plan = await prisma.plan.findFirst({
-      where: { id: req.params["planId"], isActive: true },
-      include: {
-        app: {
-          include: {
-            merchant: { select: { id: true, name: true, walletAddress: true } },
-          },
-        },
-      },
-    });
-    if (!plan) throw new AppError(ErrorCode.PLAN_NOT_FOUND, "Plan not found");
-    ok(res, plan);
-  }),
-);
-
-router.get(
   "/",
   wrap(async (req, res) => {
     const appId = req.query["appId"] as string | undefined;
@@ -39,6 +21,24 @@ router.get(
       orderBy: { createdAt: "asc" },
     });
     ok(res, plans);
+  }),
+);
+
+router.get(
+  "/:planId",
+  wrap(async (req, res) => {
+    const plan = await prisma.plan.findUnique({
+      where: { id: req.params["planId"] },
+      include: {
+        app: {
+          include: {
+            merchant: { select: { id: true, name: true, walletAddress: true } },
+          },
+        },
+      },
+    });
+    if (!plan || !plan.isActive) throw new AppError(ErrorCode.PLAN_NOT_FOUND, "Plan not found");
+    ok(res, plan);
   }),
 );
 

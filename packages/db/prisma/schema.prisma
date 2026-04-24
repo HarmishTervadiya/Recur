@@ -286,7 +286,7 @@ model WebhookEndpoint {
   id        String   @id @default(cuid())
   appId     String   @map("app_id")
   url       String
-  /// SHA-256 HMAC secret for payload signing. Stored hashed; raw shown once.
+  /// Plaintext HMAC-SHA256 signing secret. Treat like a password — never log.
   secret    String
   /// Which event types to deliver. Empty = all.
   events    String[] @default([])

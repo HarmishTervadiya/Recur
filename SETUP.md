@@ -74,7 +74,7 @@ Open `.env` and fill in each value. The table below describes every variable:
 | Variable | Description | Example |
 |---|---|---|
 | `SOLANA_RPC_URL` | RPC endpoint. Use `127.0.0.1` not `localhost` (IPv6 issues on Windows/WSL) | `http://127.0.0.1:8899` |
-| `PROGRAM_ID` | Deployed program address (pre-set in `.env.example`) | `Du86TLvDNSzGf1hkb6cVPoQpHPCwYiRXnGKm3J1GAgFj` |
+| `PROGRAM_ID` | Deployed program address (pre-set in `.env.example`) | `3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx` |
 | `KEEPER_KEYPAIR` | JSON array or base58 private key for the Keeper wallet | `[174,23,55,...]` |
 
 ### Database
@@ -228,7 +228,7 @@ After deploying, copy the program ID printed to the terminal and set it as
 
 ```bash
 solana-test-validator --reset \
-  --bpf-program Du86TLvDNSzGf1hkb6cVPoQpHPCwYiRXnGKm3J1GAgFj \
+  --bpf-program 3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx \
   contracts/target/deploy/recur.so
 ```
 

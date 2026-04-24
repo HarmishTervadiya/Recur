@@ -52,7 +52,7 @@ vi.mock("@recur/config", () => ({
     JWT_REFRESH_TTL: "7d",
     KEEPER_SECRET: KEEPER_SECRET,
     SOLANA_RPC_URL: "http://127.0.0.1:8899",
-    PROGRAM_ID: "Du86TLvDNSzGf1hkb6cVPoQpHPCwYiRXnGKm3J1GAgFj",
+    PROGRAM_ID: "3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx",
     USDC_MINT: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
     DATABASE_URL: "postgresql://localhost:5432/recur",
     PORT: 3001,

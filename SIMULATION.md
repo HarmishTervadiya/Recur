@@ -49,7 +49,7 @@ Edit `.env` — set at minimum:
 
 ```env
 SOLANA_RPC_URL=http://127.0.0.1:8899
-PROGRAM_ID=Du86TLvDNSzGf1hkb6cVPoQpHPCwYiRXnGKm3J1GAgFj
+PROGRAM_ID=3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/recur
 PORT=3001
 JWT_SECRET=any-local-secret
@@ -134,7 +134,7 @@ In a **separate WSL terminal**, start the validator with the compiled program:
 
 ```bash
 solana-test-validator --reset \
-  --bpf-program Du86TLvDNSzGf1hkb6cVPoQpHPCwYiRXnGKm3J1GAgFj \
+  --bpf-program 3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx \
   contracts/target/deploy/recur.so
 ```
 

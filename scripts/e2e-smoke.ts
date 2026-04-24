@@ -47,7 +47,7 @@ import crypto from "crypto";
 const RPC_URL = "http://localhost:8899";
 const API_URL = "http://localhost:3001";
 const KEEPER_SECRET = "localnet-keeper-secret";
-const PROGRAM_ID = new PublicKey("Du86TLvDNSzGf1hkb6cVPoQpHPCwYiRXnGKm3J1GAgFj");
+const PROGRAM_ID = new PublicKey("3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx");
 
 const AMOUNT = 1_000_000_000; // $1000 USDC (6 decimals)
 const INTERVAL = 5; // 5 seconds

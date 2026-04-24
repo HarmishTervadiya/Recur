@@ -16,6 +16,7 @@ import keeperRouter from "./modules/webhook/keeper.routes.js";
 import { errorHandler } from "./middleware/errors.js";
 import { ok } from "./middleware/response.js";
 import { authLimiter, apiLimiter } from "./middleware/rateLimit.js";
+import { startWebhookRetryWorker } from "./services/webhook-retry-worker.js";
 
 const log = createLogger("api");
 const app: Express = express();
@@ -42,6 +43,7 @@ app.use(errorHandler);
 
 app.listen(PORT, () => {
   log.info(`Recur API running on http://localhost:${PORT}`);
+  startWebhookRetryWorker();
 });
 
 export default app;

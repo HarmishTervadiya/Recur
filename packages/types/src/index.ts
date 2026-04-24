@@ -33,3 +33,10 @@ export type WebhookDeliveryStatus = z.infer<typeof WebhookDeliveryStatusSchema>;
 // Must match Prisma enum SuperAdminRole
 export const SuperAdminRoleSchema = z.enum(["owner", "admin", "viewer"]);
 export type SuperAdminRole = z.infer<typeof SuperAdminRoleSchema>;
+
+// Webhook delivery payload shape sent to merchant endpoints
+export interface WebhookPayload {
+  event: EventType;
+  timestamp: string; // ISO-8601
+  data: Record<string, unknown>;
+}

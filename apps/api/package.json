@@ -17,6 +17,7 @@
     "@recur/logger": "*",
     "@recur/types": "*",
     "@solana/web3.js": "^1.98.4",
+    "axios": "^1.15.2",
     "bs58": "^6.0.0",
     "cors": "^2.8.5",
     "express": "^4.19.0",

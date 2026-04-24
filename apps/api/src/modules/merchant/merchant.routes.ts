@@ -276,7 +276,7 @@ router.post(
       data: {
         appId: req.params["appId"]!,
         url: body.url,
-        secret: crypto.createHash("sha256").update(rawSecret).digest("hex"),
+        secret: rawSecret,
         events: body.events,
       },
     });

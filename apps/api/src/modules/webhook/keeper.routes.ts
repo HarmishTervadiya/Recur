@@ -12,6 +12,7 @@ import { createLogger } from "@recur/logger";
 import { wrap, AppError } from "../../middleware/errors.js";
 import { ok, fail } from "../../middleware/response.js";
 import { ErrorCode } from "../../errors.js";
+import { dispatchWebhook } from "../../services/webhook-dispatcher.js";
 
 const logger = createLogger("keeper-api");
 const router: ExpressRouter = Router();
@@ -117,6 +118,18 @@ router.post(
       "Payment recorded",
     );
 
+    void dispatchWebhook(subscription.plan.appId, "payment_success", {
+      subscriptionId: subscription.id,
+      subscriptionPda: body.subscriptionPda,
+      txSignature: body.txSignature,
+      amountGross: body.amountGross,
+      platformFee: body.platformFee,
+      amountNet: body.amountNet,
+      fromWallet: body.fromWallet ?? null,
+      toWallet: body.toWallet ?? null,
+      confirmedAt: body.confirmedAt,
+    });
+
     ok(res, { id: tx.id }, 201);
   }),
 );
@@ -140,6 +153,7 @@ router.post(
 
     const subscription = await prisma.subscription.findUnique({
       where: { subscriptionPda: body.subscriptionPda },
+      include: { plan: true },
     });
     if (!subscription)
       throw new AppError(
@@ -181,6 +195,13 @@ router.post(
 
     logger.warn({ pda: body.subscriptionPda, tx: body.txSignature }, "Payment FAILED recorded");
 
+    void dispatchWebhook(subscription.plan.appId, "payment_failed", {
+      subscriptionId: subscription.id,
+      subscriptionPda: body.subscriptionPda,
+      txSignature: body.txSignature,
+      amountGross: body.amountGross,
+    });
+
     ok(res, { id: tx.id }, 201);
   }),
 );
@@ -202,6 +223,7 @@ router.post(
 
     const subscription = await prisma.subscription.findUnique({
       where: { subscriptionPda: body.subscriptionPda },
+      include: { plan: true },
     });
     if (!subscription)
       throw new AppError(
@@ -246,6 +268,13 @@ router.post(
       { pda: body.subscriptionPda, type: body.cancelType, status: isFinalized ? "cancelled" : "active" },
       "Cancel event recorded",
     );
+
+    void dispatchWebhook(subscription.plan.appId, eventTypeMap[body.cancelType], {
+      subscriptionId: subscription.id,
+      subscriptionPda: body.subscriptionPda,
+      cancelType: body.cancelType,
+      confirmedAt: body.confirmedAt,
+    });
 
     ok(res, { ok: true });
   }),
@@ -301,6 +330,14 @@ router.post(
         eventType: "subscription_created",
         metadata: { subscriberWallet: body.subscriberWallet, planId: body.planId },
       },
+    });
+
+    void dispatchWebhook(plan.appId, "subscription_created", {
+      subscriptionId: subscription.id,
+      subscriptionPda: body.subscriptionPda,
+      planId: body.planId,
+      subscriberWallet: body.subscriberWallet,
+      confirmedAt: body.confirmedAt,
     });
 
     ok(res, { id: subscription.id }, 201);

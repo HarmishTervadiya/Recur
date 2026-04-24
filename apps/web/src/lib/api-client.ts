@@ -1,5 +1,50 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
+/** Field-level error from API validation responses. */
+export interface FieldError {
+  path: string;
+  message: string;
+}
+
+/**
+ * Extract field-level validation errors from an API response.
+ * Returns a map of field path -> error message, plus any leftover message for fields not in the map.
+ */
+export function parseFieldErrors<T>(
+  res: ApiResponse<T>,
+  knownFields: string[],
+): { fieldErrors: Record<string, string>; fallbackMessage: string | null } {
+  const fieldErrors: Record<string, string> = {};
+  let fallbackMessage: string | null = null;
+
+  if (
+    res.error?.code === "VALIDATION_ERROR" &&
+    Array.isArray(res.error.details)
+  ) {
+    const details = res.error.details as FieldError[];
+    const unmatched: string[] = [];
+
+    for (const d of details) {
+      if (knownFields.includes(d.path)) {
+        // Take first error per field
+        if (!fieldErrors[d.path]) {
+          fieldErrors[d.path] = d.message;
+        }
+      } else {
+        unmatched.push(`${d.path}: ${d.message}`);
+      }
+    }
+
+    if (unmatched.length > 0) {
+      fallbackMessage = unmatched.join("; ");
+    }
+  } else if (res.error) {
+    fallbackMessage = res.error.message;
+  }
+
+  return { fieldErrors, fallbackMessage };
+}
+
 interface ApiResponse<T> {
   success: boolean;
   data: T | null;

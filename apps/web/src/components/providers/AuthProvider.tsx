@@ -6,6 +6,7 @@ import {
   useState,
   useCallback,
   useEffect,
+  useRef,
 } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import bs58 from "bs58";
@@ -42,36 +43,48 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const connectedRef = useRef(connected);
+  connectedRef.current = connected;
 
-  // Check for existing token on mount — validate JWT expiry
+  // Check for existing token on mount — validate JWT expiry.
+  // Only runs once on mount. Does NOT depend on `connected` because
+  // the wallet adapter briefly flickers `connected` to false during
+  // client-side navigation, which would kill the auth state.
   useEffect(() => {
     const token = localStorage.getItem("recur_access_token");
-    if (token && connected) {
+    if (token) {
       try {
         const payload = JSON.parse(atob(token.split(".")[1]));
         if (payload.exp && payload.exp * 1000 > Date.now()) {
           setIsAuthenticated(true);
         } else {
-          // Token expired — clear it
           clearTokens();
-          setIsAuthenticated(false);
         }
       } catch {
         clearTokens();
-        setIsAuthenticated(false);
       }
-    } else {
-      setIsAuthenticated(false);
     }
     setIsAuthLoading(false);
-  }, [connected]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // If wallet disconnects, clear auth
+  // If the wallet is explicitly disconnected by the user (not a navigation
+  // flicker), clear auth. We detect this by checking whether we were
+  // previously authenticated AND the wallet is now disconnected AND
+  // there's no ongoing sign-in.
   useEffect(() => {
-    if (!connected) {
-      setIsAuthenticated(false);
+    // Skip the initial mount — only react to actual disconnects
+    if (!connected && isAuthenticated && !isSigningIn) {
+      // Small delay to filter out navigation flickers — if the wallet
+      // reconnects within 500ms via autoConnect, don't sign out.
+      const timeout = setTimeout(() => {
+        if (!connectedRef.current) {
+          clearTokens();
+          setIsAuthenticated(false);
+        }
+      }, 500);
+      return () => clearTimeout(timeout);
     }
-  }, [connected]);
+  }, [connected, isAuthenticated, isSigningIn]);
 
   const signIn = useCallback(async () => {
     if (!publicKey || !signMessage) return;

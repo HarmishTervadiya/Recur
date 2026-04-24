@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { apiClient } from "../../../lib/api-client";
+import { apiClient, parseFieldErrors } from "../../../lib/api-client";
 import { useToast } from "../../../components/ui/ToastProvider";
 
 interface MerchantProfile {
@@ -42,6 +42,9 @@ export default function SettingsPage() {
   const [copiedKey, setCopiedKey] = useState(false);
   const [emailError, setEmailError] = useState("");
   const [businessUrlError, setBusinessUrlError] = useState("");
+  const [nameError, setNameError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+  const [businessNameError, setBusinessNameError] = useState("");
   const { toast } = useToast();
 
   const fetchProfile = useCallback(async () => {
@@ -70,6 +73,9 @@ export default function SettingsPage() {
   const handleSaveProfile = async () => {
     setEmailError("");
     setBusinessUrlError("");
+    setNameError("");
+    setPhoneError("");
+    setBusinessNameError("");
     let valid = true;
     if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       setEmailError("Enter a valid email address"); valid = false;
@@ -90,7 +96,16 @@ export default function SettingsPage() {
       }),
     });
     if (res.success && res.data) { setMerchant(res.data); toast("success", "Profile saved"); }
-    else { toast("error", res.error?.message ?? "Failed to save profile"); }
+    else {
+      const { fieldErrors, fallbackMessage } = parseFieldErrors(res, ["name", "email", "phone", "businessName", "businessUrl"]);
+      if (fieldErrors.name) setNameError(fieldErrors.name);
+      if (fieldErrors.email) setEmailError(fieldErrors.email);
+      if (fieldErrors.phone) setPhoneError(fieldErrors.phone);
+      if (fieldErrors.businessName) setBusinessNameError(fieldErrors.businessName);
+      if (fieldErrors.businessUrl) setBusinessUrlError(fieldErrors.businessUrl);
+      if (fallbackMessage) toast("error", fallbackMessage);
+      else if (Object.keys(fieldErrors).length === 0) toast("error", res.error?.message ?? "Failed to save profile");
+    }
     setSaving(false);
   };
 
@@ -146,8 +161,9 @@ export default function SettingsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-[11px] font-semibold text-recur-text-muted uppercase tracking-wider mb-1.5">Name</label>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name"
-              className="w-full px-4 py-2.5 text-[13px] bg-recur-base border border-recur-border rounded-[10px] text-recur-text-heading placeholder:text-recur-text-dim focus:outline-none focus:border-recur-primary transition-colors" />
+            <input type="text" value={name} onChange={(e) => { setName(e.target.value); if (nameError) setNameError(""); }} placeholder="Your name"
+              className={`w-full px-4 py-2.5 text-[13px] bg-recur-base border rounded-[10px] text-recur-text-heading placeholder:text-recur-text-dim focus:outline-none transition-colors ${nameError ? "border-recur-error" : "border-recur-border focus:border-recur-primary"}`} />
+            {nameError && <p className="text-[11px] text-recur-error mt-1">{nameError}</p>}
           </div>
           <div>
             <label className="block text-[11px] font-semibold text-recur-text-muted uppercase tracking-wider mb-1.5">Email</label>
@@ -157,13 +173,15 @@ export default function SettingsPage() {
           </div>
           <div>
             <label className="block text-[11px] font-semibold text-recur-text-muted uppercase tracking-wider mb-1.5">Phone</label>
-            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 (555) 000-0000"
-              className="w-full px-4 py-2.5 text-[13px] bg-recur-base border border-recur-border rounded-[10px] text-recur-text-heading placeholder:text-recur-text-dim focus:outline-none focus:border-recur-primary transition-colors" />
+            <input type="tel" value={phone} onChange={(e) => { setPhone(e.target.value); if (phoneError) setPhoneError(""); }} placeholder="+1 (555) 000-0000"
+              className={`w-full px-4 py-2.5 text-[13px] bg-recur-base border rounded-[10px] text-recur-text-heading placeholder:text-recur-text-dim focus:outline-none transition-colors ${phoneError ? "border-recur-error" : "border-recur-border focus:border-recur-primary"}`} />
+            {phoneError && <p className="text-[11px] text-recur-error mt-1">{phoneError}</p>}
           </div>
           <div>
             <label className="block text-[11px] font-semibold text-recur-text-muted uppercase tracking-wider mb-1.5">Business Name</label>
-            <input type="text" value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="Acme Inc."
-              className="w-full px-4 py-2.5 text-[13px] bg-recur-base border border-recur-border rounded-[10px] text-recur-text-heading placeholder:text-recur-text-dim focus:outline-none focus:border-recur-primary transition-colors" />
+            <input type="text" value={businessName} onChange={(e) => { setBusinessName(e.target.value); if (businessNameError) setBusinessNameError(""); }} placeholder="Acme Inc."
+              className={`w-full px-4 py-2.5 text-[13px] bg-recur-base border rounded-[10px] text-recur-text-heading placeholder:text-recur-text-dim focus:outline-none transition-colors ${businessNameError ? "border-recur-error" : "border-recur-border focus:border-recur-primary"}`} />
+            {businessNameError && <p className="text-[11px] text-recur-error mt-1">{businessNameError}</p>}
           </div>
           <div className="md:col-span-2">
             <label className="block text-[11px] font-semibold text-recur-text-muted uppercase tracking-wider mb-1.5">Business URL</label>

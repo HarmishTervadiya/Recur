@@ -59,8 +59,8 @@ function parseEnv(): Env {
 
   // Resolve RPC URL: explicit env var > cluster default
   const cluster = parsed.SOLANA_CLUSTER;
-  const rpcUrl =
-    parsed.SOLANA_RPC_URL ?? CLUSTER_RPC_DEFAULTS[cluster] ?? CLUSTER_RPC_DEFAULTS["devnet"];
+  const rpcUrl: string =
+    parsed.SOLANA_RPC_URL ?? CLUSTER_RPC_DEFAULTS[cluster] ?? CLUSTER_RPC_DEFAULTS["devnet"]!;
 
   return { ...parsed, SOLANA_RPC_URL: rpcUrl };
 }

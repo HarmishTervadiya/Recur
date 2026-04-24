@@ -35,7 +35,7 @@ import path from "path";
 const RPC_URL = "http://localhost:8899";
 const API_URL = "http://localhost:3001";
 const KEEPER_SECRET = "localnet-keeper-secret";
-const PROGRAM_ID = new PublicKey("Du86TLvDNSzGf1hkb6cVPoQpHPCwYiRXnGKm3J1GAgFj");
+const PROGRAM_ID = new PublicKey("3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx");
 
 const AMOUNT = 2_000_000; // $2.00 USDC — small so we can see many payments
 const INTERVAL = 10; // 10 seconds — keeper runs every 60s, so we'll see batches

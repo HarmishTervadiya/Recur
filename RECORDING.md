@@ -14,7 +14,7 @@
 
 ```bash
 solana-test-validator --reset \
-  --bpf-program Du86TLvDNSzGf1hkb6cVPoQpHPCwYiRXnGKm3J1GAgFj \
+  --bpf-program 3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx \
   contracts/target/deploy/recur.so
 ```
 
@@ -132,7 +132,7 @@ Net to merchant:     $9.925
 
 ```powershell
 # 1 — Validator (leave running)
-solana-test-validator --reset --bpf-program Du86TLvDNSzGf1hkb6cVPoQpHPCwYiRXnGKm3J1GAgFj contracts/target/deploy/recur.so
+solana-test-validator --reset --bpf-program 3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx contracts/target/deploy/recur.so
 
 # 2 — API (leave running)
 bun run apps/api/src/index.ts

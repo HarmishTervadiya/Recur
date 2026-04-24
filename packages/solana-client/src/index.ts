@@ -1,12 +1,26 @@
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, Connection } from "@solana/web3.js";
 
-export const PROGRAM_ID = new PublicKey(
-  "Du86TLvDNSzGf1hkb6cVPoQpHPCwYiRXnGKm3J1GAgFj",
-);
+// Default program ID — can be overridden at runtime via env.
+const DEFAULT_PROGRAM_ID = "3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx";
+const DEFAULT_USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
 
-export const USDC_MINT_DEVNET = new PublicKey(
-  "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
-);
+export const PROGRAM_ID = new PublicKey(DEFAULT_PROGRAM_ID);
+export const USDC_MINT_DEVNET = new PublicKey(DEFAULT_USDC_MINT);
+
+/**
+ * Create a program ID PublicKey from a string.
+ * Use this when you need to pass env.PROGRAM_ID at runtime.
+ */
+export function getProgramId(id?: string): PublicKey {
+  return new PublicKey(id ?? DEFAULT_PROGRAM_ID);
+}
+
+/**
+ * Create a Connection from config values.
+ */
+export function createConnection(rpcUrl: string, commitment: "confirmed" | "finalized" = "confirmed"): Connection {
+  return new Connection(rpcUrl, commitment);
+}
 
 /**
  * Convert a hex-encoded planSeed string (from DB) to an 8-byte Buffer

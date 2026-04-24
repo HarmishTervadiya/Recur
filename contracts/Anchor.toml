@@ -6,17 +6,27 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-recur = "Du86TLvDNSzGf1hkb6cVPoQpHPCwYiRXnGKm3J1GAgFj"
+recur = "3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx"
 
 [programs.localnet]
-recur = "Du86TLvDNSzGf1hkb6cVPoQpHPCwYiRXnGKm3J1GAgFj"
+recur = "3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
 cluster = "Localnet"
-wallet = "~/.config/solana/id.json"
+wallet = "/mnt/c/Users/Harpalsinh/.config/solana/id.json"
+
+# ─── Devnet deploy instructions ──────────────────────────
+# 1. Fund your deploy keypair:
+#      solana airdrop 5 --url devnet
+# 2. Build WITHOUT testing feature:
+#      anchor build
+# 3. Deploy:
+#      anchor deploy --provider.cluster devnet
+# 4. Update PROGRAM_ID in .env if the address changes.
+# ──────────────────────────────────────────────────────────
 
 [scripts]
 test = "npx ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

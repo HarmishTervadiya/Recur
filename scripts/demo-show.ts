@@ -46,7 +46,7 @@ import path from "path";
 
 const RPC_URL = "http://127.0.0.1:8899";
 const API_URL = "http://localhost:3001";
-const PROGRAM_ID = new PublicKey("Du86TLvDNSzGf1hkb6cVPoQpHPCwYiRXnGKm3J1GAgFj");
+const PROGRAM_ID = new PublicKey("3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx");
 
 const DEFAULT_PLAN_SEED = Buffer.alloc(8);
 DEFAULT_PLAN_SEED.writeBigUInt64LE(BigInt(1));

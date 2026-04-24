@@ -91,6 +91,15 @@ export async function apiClient<T>(
     }
   }
 
-  const json: ApiResponse<T> = await res.json();
+  let json: ApiResponse<T>;
+  try {
+    json = await res.json();
+  } catch {
+    json = {
+      success: false,
+      data: null,
+      error: { code: "PARSE_ERROR", message: `Server returned ${res.status} with non-JSON body` },
+    };
+  }
   return json;
 }

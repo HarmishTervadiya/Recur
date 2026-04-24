@@ -144,7 +144,7 @@ router.get(
 const CreatePlanBody = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
-  amountBaseUnits: z.number().min(1),
+  amountBaseUnits: z.coerce.number().min(1),
   intervalSeconds: z.number().int().positive(),
   currency: z.string().default("USDC"),
 });

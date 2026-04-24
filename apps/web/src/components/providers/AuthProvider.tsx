@@ -14,6 +14,7 @@ import { apiClient, setTokens, clearTokens } from "../../lib/api-client";
 interface AuthContextType {
   walletAddress: string | null;
   isAuthenticated: boolean;
+  isAuthLoading: boolean;
   isSigningIn: boolean;
   signIn: () => Promise<void>;
   signOut: () => void;
@@ -22,6 +23,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   walletAddress: null,
   isAuthenticated: false,
+  isAuthLoading: true,
   isSigningIn: false,
   signIn: async () => {},
   signOut: () => {},
@@ -38,14 +40,30 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const { publicKey, signMessage, disconnect, connected } = useWallet();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isSigningIn, setIsSigningIn] = useState(false);
 
-  // Check for existing token on mount
+  // Check for existing token on mount — validate JWT expiry
   useEffect(() => {
     const token = localStorage.getItem("recur_access_token");
     if (token && connected) {
-      setIsAuthenticated(true);
+      try {
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        if (payload.exp && payload.exp * 1000 > Date.now()) {
+          setIsAuthenticated(true);
+        } else {
+          // Token expired — clear it
+          clearTokens();
+          setIsAuthenticated(false);
+        }
+      } catch {
+        clearTokens();
+        setIsAuthenticated(false);
+      }
+    } else {
+      setIsAuthenticated(false);
     }
+    setIsAuthLoading(false);
   }, [connected]);
 
   // If wallet disconnects, clear auth
@@ -121,7 +139,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   return (
     <AuthContext.Provider
-      value={{ walletAddress, isAuthenticated, isSigningIn, signIn, signOut }}
+      value={{ walletAddress, isAuthenticated, isAuthLoading, isSigningIn, signIn, signOut }}
     >
       {children}
     </AuthContext.Provider>

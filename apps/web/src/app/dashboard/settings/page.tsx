@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 import { useEffect, useState, useCallback } from "react";
 import { apiClient } from "../../../lib/api-client";
 import { useToast } from "../../../components/ui/ToastProvider";
@@ -84,11 +82,11 @@ export default function SettingsPage() {
     const res = await apiClient<MerchantProfile>("/merchant/me", {
       method: "PATCH",
       body: JSON.stringify({
-        name: name.trim() || undefined,
-        email: email.trim() || undefined,
-        phone: phone.trim() || undefined,
-        businessName: businessName.trim() || undefined,
-        businessUrl: businessUrl.trim() || undefined,
+        name: name.trim() || null,
+        email: email.trim() || null,
+        phone: phone.trim() || null,
+        businessName: businessName.trim() || null,
+        businessUrl: businessUrl.trim() || null,
       }),
     });
     if (res.success && res.data) { setMerchant(res.data); toast("success", "Profile saved"); }

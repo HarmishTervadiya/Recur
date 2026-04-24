@@ -100,6 +100,7 @@ export default function AppDetailPage() {
   const [webhookUrl, setWebhookUrl] = useState("");
   const [creatingWebhook, setCreatingWebhook] = useState(false);
   const [webhookSecret, setWebhookSecret] = useState<string | null>(null);
+  const [copiedWebhookSecret, setCopiedWebhookSecret] = useState(false);
   const { toast } = useToast();
 
   // Validation errors
@@ -223,6 +224,8 @@ export default function AppDetailPage() {
       setWebhookSecret(res.data.secret);
       setWebhookUrl("");
       setWebhookUrlError("");
+      setShowCreateWebhook(false);
+      setCopiedWebhookSecret(false);
       toast("success", "Webhook endpoint created");
       fetchWebhooks();
     } else {
@@ -445,9 +448,21 @@ export default function AppDetailPage() {
               <p className="text-[12px] font-semibold text-recur-warning mb-2">
                 Webhook signing secret (shown once — copy it now):
               </p>
-              <code className="block text-[11px] font-mono text-recur-text-heading bg-recur-base px-3 py-2 rounded-[8px] break-all">
-                {webhookSecret}
-              </code>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-[11px] font-mono text-recur-text-heading bg-recur-base px-3 py-2 rounded-[8px] break-all">
+                  {webhookSecret}
+                </code>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(webhookSecret);
+                    setCopiedWebhookSecret(true);
+                    setTimeout(() => setCopiedWebhookSecret(false), 2000);
+                  }}
+                  className="btn-secondary text-[11px] px-3 py-1.5 shrink-0"
+                >
+                  {copiedWebhookSecret ? "Copied!" : "Copy"}
+                </button>
+              </div>
             </div>
           )}
 

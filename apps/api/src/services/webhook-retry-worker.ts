@@ -90,8 +90,12 @@ async function retryFailedDeliveries(): Promise<void> {
         logger.info({ deliveryId: delivery.id, attempts: newAttempts }, "Webhook delivery succeeded on retry");
       } else {
         const abandoned = newAttempts >= MAX_ATTEMPTS;
-        // Use delivery.attempts (before increment) as backoff index:
-        // attempt 1 failed -> backoff[1] = 5m, attempt 2 -> backoff[2] = 30m, etc.
+        // backoffIndex maps the number of prior failures to a delay:
+        //   attempts=1 (1st retry) → index 1 → 5m
+        //   attempts=2 (2nd retry) → index 2 → 30m
+        //   attempts=3 (3rd retry) → index 3 → 2h
+        //   attempts=4 (4th retry) → index 4 → 12h  → then abandoned
+        // index 0 (1m) is used by the initial dispatcher, never by the retry worker.
         const backoffIndex = Math.min(delivery.attempts, BACKOFF_MS.length - 1);
         const nextRetry = abandoned
           ? null

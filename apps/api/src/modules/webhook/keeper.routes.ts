@@ -128,7 +128,7 @@ router.post(
       fromWallet: body.fromWallet ?? null,
       toWallet: body.toWallet ?? null,
       confirmedAt: body.confirmedAt,
-    });
+    }).catch((err) => logger.error({ err }, "Webhook dispatch failed for payment_success"));
 
     ok(res, { id: tx.id }, 201);
   }),
@@ -200,7 +200,7 @@ router.post(
       subscriptionPda: body.subscriptionPda,
       txSignature: body.txSignature,
       amountGross: body.amountGross,
-    });
+    }).catch((err) => logger.error({ err }, "Webhook dispatch failed for payment_failed"));
 
     ok(res, { id: tx.id }, 201);
   }),
@@ -274,7 +274,7 @@ router.post(
       subscriptionPda: body.subscriptionPda,
       cancelType: body.cancelType,
       confirmedAt: body.confirmedAt,
-    });
+    }).catch((err) => logger.error({ err }, "Webhook dispatch failed for cancel event"));
 
     ok(res, { ok: true });
   }),
@@ -338,7 +338,7 @@ router.post(
       planId: body.planId,
       subscriberWallet: body.subscriberWallet,
       confirmedAt: body.confirmedAt,
-    });
+    }).catch((err) => logger.error({ err }, "Webhook dispatch failed for subscription_created"));
 
     ok(res, { id: subscription.id }, 201);
   }),

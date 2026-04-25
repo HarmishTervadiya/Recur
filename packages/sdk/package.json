@@ -4,19 +4,29 @@
   "private": true,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./webhook": {
+      "types": "./dist/webhook.d.ts",
+      "default": "./dist/webhook.js"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "lint": "echo lint:sdk"
   },
   "dependencies": {
-    "@recur/solana-client": "*"
-  },
-  "peerDependencies": {
-    "react": "^18.0.0"
+    "@coral-xyz/anchor": "^0.30.1",
+    "@recur/solana-client": "*",
+    "@recur/types": "*",
+    "@solana/spl-token": "^0.4.6",
+    "@solana/web3.js": "^1.91.0"
   },
   "devDependencies": {
-    "@types/react": "^18.2.0",
-    "react": "^18.2.0",
+    "@types/node": "^20.12.0",
     "typescript": "^5.4.0"
   }
 }

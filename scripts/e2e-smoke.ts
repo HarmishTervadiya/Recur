@@ -270,6 +270,7 @@ async function main() {
   const subscriberAuth = { Authorization: `Bearer ${subscriberToken}` };
 
   const regRes = await api("POST", "/subscriber/subscriptions", {
+    appId,
     planId,
     subscriptionPda: subPda.toBase58(),
   }, subscriberAuth);

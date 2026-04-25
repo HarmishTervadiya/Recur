@@ -161,6 +161,7 @@ async function main() {
   const subAuth = { Authorization: `Bearer ${subscriberToken}` };
 
   const regRes = await api("POST", "/subscriber/subscriptions", {
+    appId,
     planId,
     subscriptionPda: FAKE_PDA,
   }, subAuth);

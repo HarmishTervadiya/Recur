@@ -88,10 +88,10 @@ function LivePlanCard({ plan, highlight }: PlanCardProps) {
           ))}
         </div>
         <Link
-          href={`/subscribe/${plan.id}`}
+          href="#developers"
           className="block w-full text-center text-[13px] font-bold text-white bg-recur-primary rounded-[10px] py-2.5 hover:brightness-110 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-recur-primary focus-visible:ring-offset-2 focus-visible:ring-offset-recur-base"
         >
-          Get started
+          View integration
         </Link>
       </div>
     );
@@ -122,10 +122,10 @@ function LivePlanCard({ plan, highlight }: PlanCardProps) {
         ))}
       </div>
       <Link
-        href={`/subscribe/${plan.id}`}
+        href="#developers"
         className="block w-full text-center text-[13px] font-semibold text-recur-light border border-recur-border-light rounded-[10px] py-2.5 hover:border-recur-primary transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-recur-primary focus-visible:ring-offset-2 focus-visible:ring-offset-recur-base"
       >
-        Get started
+        View integration
       </Link>
     </div>
   );

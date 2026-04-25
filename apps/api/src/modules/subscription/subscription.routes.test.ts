@@ -97,9 +97,11 @@ describe("subscriber routes", () => {
   describe("POST /subscriber/subscriptions", () => {
     it("registers a subscription", async () => {
       prismaMock.subscriber.findUnique.mockResolvedValue(SUBSCRIBER as any);
-      prismaMock.plan.findUnique.mockResolvedValue({
+      prismaMock.plan.findFirst.mockResolvedValue({
         id: "plan1",
+        appId: "app1",
         isActive: true,
+        app: { id: "app1", isActive: true },
       } as any);
       prismaMock.subscription.create.mockResolvedValue({
         id: "sub1",
@@ -120,22 +122,28 @@ describe("subscriber routes", () => {
         .post("/subscriber/subscriptions")
         .set("Authorization", `Bearer ${token}`)
         .send({
+          appId: "app1",
           planId: "clx0000000000000000000000",
           subscriptionPda: "pda123456789012345678901234567890",
         });
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
+      expect(prismaMock.plan.findFirst).toHaveBeenCalledWith({
+        where: { id: "clx0000000000000000000000", appId: "app1" },
+        include: { app: true },
+      });
     });
 
     it("returns 404 for missing plan", async () => {
       prismaMock.subscriber.findUnique.mockResolvedValue(SUBSCRIBER as any);
-      prismaMock.plan.findUnique.mockResolvedValue(null);
+      prismaMock.plan.findFirst.mockResolvedValue(null);
 
       const res = await request(app)
         .post("/subscriber/subscriptions")
         .set("Authorization", `Bearer ${token}`)
         .send({
+          appId: "app1",
           planId: "clx0000000000000000000000",
           subscriptionPda: "pda123456789012345678901234567890",
         });
@@ -146,15 +154,18 @@ describe("subscriber routes", () => {
 
     it("returns 400 for inactive plan", async () => {
       prismaMock.subscriber.findUnique.mockResolvedValue(SUBSCRIBER as any);
-      prismaMock.plan.findUnique.mockResolvedValue({
+      prismaMock.plan.findFirst.mockResolvedValue({
         id: "plan1",
+        appId: "app1",
         isActive: false,
+        app: { id: "app1", isActive: true },
       } as any);
 
       const res = await request(app)
         .post("/subscriber/subscriptions")
         .set("Authorization", `Bearer ${token}`)
         .send({
+          appId: "app1",
           planId: "clx0000000000000000000000",
           subscriptionPda: "pda123456789012345678901234567890",
         });

@@ -17,7 +17,7 @@ router.get(
       );
 
     const plans = await prisma.plan.findMany({
-      where: { appId, isActive: true },
+      where: { appId, isActive: true, app: { isActive: true } },
       orderBy: { createdAt: "asc" },
     });
     ok(res, plans);
@@ -27,8 +27,15 @@ router.get(
 router.get(
   "/:planId",
   wrap(async (req, res) => {
-    const plan = await prisma.plan.findUnique({
-      where: { id: req.params["planId"] },
+    const appId = req.query["appId"] as string | undefined;
+    if (!appId)
+      throw new AppError(
+        ErrorCode.MISSING_APP_ID,
+        "appId query param required",
+      );
+
+    const plan = await prisma.plan.findFirst({
+      where: { id: req.params["planId"], appId },
       include: {
         app: {
           include: {
@@ -37,7 +44,8 @@ router.get(
         },
       },
     });
-    if (!plan || !plan.isActive) throw new AppError(ErrorCode.PLAN_NOT_FOUND, "Plan not found");
+    if (!plan || !plan.isActive || !plan.app.isActive)
+      throw new AppError(ErrorCode.PLAN_NOT_FOUND, "Plan not found");
     ok(res, plan);
   }),
 );

@@ -142,6 +142,8 @@ export interface CreatePlanOptions {
 }
 
 export interface RegisterSubscriptionOptions {
+  /** App ID that owns the plan. */
+  appId: string;
   /** Plan ID (cuid from API). */
   planId: string;
   /** The on-chain subscription PDA address (base58). */

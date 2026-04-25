@@ -237,6 +237,7 @@ async function main() {
     // Auth subscriber + register in DB
     const subToken = await authenticateWallet(sub, "subscriber");
     const regRes = await api("POST", "/subscriber/subscriptions", {
+      appId,
       planId,
       subscriptionPda: pda.toBase58(),
     }, { Authorization: `Bearer ${subToken}` });

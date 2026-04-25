@@ -302,6 +302,7 @@ async function main() {
   log("Authenticating subscriber...");
   const subToken = await authenticateWallet(subscriberKp, "subscriber");
   const regRes = await apiCall("POST", "/subscriber/subscriptions", {
+    appId,
     planId,
     subscriptionPda: pda.toBase58(),
   }, { Authorization: `Bearer ${subToken}` });

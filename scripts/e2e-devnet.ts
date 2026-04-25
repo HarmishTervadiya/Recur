@@ -18,7 +18,7 @@
  *   5. Merchant creates app + plan
  *   6. Subscriber creates on-chain subscription (PDA + delegation)
  *   7. Registers subscription in DB via subscriber API
- *   8. Waits for billing interval, then processes payment on-chain
+ *   8. Processes first payment instantly on-chain (no interval wait)
  *   9. Reports payment to API (as keeper)
  *  10. Verifies DB state via API
  *  11. Tests cancel flow
@@ -325,9 +325,11 @@ async function main() {
   const subscriptionId = (regRes.json["data"] as Record<string, unknown>)["id"] as string;
   console.log(`  subscription DB id: ${subscriptionId}`);
 
-  // Step 9: Wait for interval then process payment on-chain
-  log("9", `Waiting ${INTERVAL + 3}s for billing interval to elapse...`);
-  await new Promise((r) => setTimeout(r, (INTERVAL + 3) * 1000));
+  // Step 9: Process first payment on-chain (instant — no wait needed)
+  // With the fix, last_payment_timestamp = now - interval, so payment is immediately due
+  log("9", "Processing first payment on-chain (instant, no interval wait)");
+  // Small delay for clock consistency
+  await new Promise((r) => setTimeout(r, 2000));
 
   log("9", "Processing payment on-chain (simulating keeper)");
   const processPaymentIx = new TransactionInstruction({

@@ -141,6 +141,13 @@ export interface CreatePlanOptions {
   intervalSeconds: number;
 }
 
+export interface RegisterSubscriptionOptions {
+  /** Plan ID (cuid from API). */
+  planId: string;
+  /** The on-chain subscription PDA address (base58). */
+  subscriptionPda: string;
+}
+
 // ---------------------------------------------------------------------------
 // Transaction builder result
 // ---------------------------------------------------------------------------

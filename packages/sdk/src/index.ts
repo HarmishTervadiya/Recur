@@ -21,6 +21,7 @@ export type {
   ApiResponse,
   PaginationMeta,
   CreatePlanOptions,
+  RegisterSubscriptionOptions,
   ListOptions,
 } from "./types.js";
 

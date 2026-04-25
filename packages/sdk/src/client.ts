@@ -30,6 +30,7 @@ import type {
   TransactionInfo,
   ApiResponse,
   CreatePlanOptions,
+  RegisterSubscriptionOptions,
   ListOptions,
 } from "./types.js";
 
@@ -257,12 +258,16 @@ export class RecurClient {
     path: string,
     options: RequestInit = {},
   ): Promise<ApiResponse<T>> {
+    // Caller-supplied headers take precedence over the stored API key.
+    // This allows subscriber methods to pass a per-call Bearer token
+    // without it being overwritten by the merchant API key.
+    const callerHeaders = (options.headers as Record<string, string> | undefined) ?? {};
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      ...(options.headers as Record<string, string> | undefined),
+      ...callerHeaders,
     };
 
-    if (this.apiKey) {
+    if (this.apiKey && !callerHeaders["Authorization"]) {
       headers["Authorization"] = `Bearer ${this.apiKey}`;
     }
 
@@ -354,5 +359,72 @@ export class RecurClient {
     return this.apiFetch<TransactionInfo[]>(
       `/merchant/apps/${appId}/transactions${qs ? `?${qs}` : ""}`,
     );
+  }
+
+  // =========================================================================
+  // Subscriber API — requires subscriber JWT (passed per-call, not stored)
+  // =========================================================================
+
+  /**
+   * Register a newly-created on-chain subscription with the Recur API.
+   * Call this after the initialize_subscription transaction confirms on-chain.
+   *
+   * @param options  - planId + subscriptionPda
+   * @param authToken - Subscriber JWT from the nonce→sign→verify auth flow
+   */
+  async registerSubscription(
+    options: RegisterSubscriptionOptions,
+    authToken: string,
+  ): Promise<ApiResponse<SubscriptionInfo>> {
+    return this.apiFetch<SubscriptionInfo>("/subscriber/subscriptions", {
+      method: "POST",
+      body: JSON.stringify({
+        planId: options.planId,
+        subscriptionPda: options.subscriptionPda,
+      }),
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+  }
+
+  /**
+   * Fetch all subscriptions for the authenticated subscriber.
+   *
+   * @param authToken - Subscriber JWT
+   * @param options   - Pagination options
+   */
+  async getMySubscriptions(
+    authToken: string,
+    options?: ListOptions,
+  ): Promise<ApiResponse<SubscriptionInfo[]>> {
+    const params = new URLSearchParams();
+    if (options?.page) params.set("page", String(options.page));
+    if (options?.limit) params.set("limit", String(options.limit));
+    const qs = params.toString();
+    return this.apiFetch<SubscriptionInfo[]>(
+      `/subscriber/subscriptions${qs ? `?${qs}` : ""}`,
+      { headers: { Authorization: `Bearer ${authToken}` } },
+    );
+  }
+
+  /**
+   * Fetch a single subscription by its on-chain PDA address.
+   * Scans the subscriber's subscriptions for a matching PDA.
+   * Falls back to the on-chain account if the API returns no match.
+   *
+   * @param subscriptionPda - Base58 PDA address
+   * @param authToken       - Subscriber JWT
+   */
+  async getSubscription(
+    subscriptionPda: string,
+    authToken: string,
+  ): Promise<ApiResponse<SubscriptionInfo | null>> {
+    // Fetch all subscriber subscriptions and find by PDA
+    const res = await this.getMySubscriptions(authToken);
+    if (!res.success || !res.data) {
+      return { success: res.success, data: null, error: res.error };
+    }
+
+    const match = res.data.find((s) => s.subscriptionPda === subscriptionPda) ?? null;
+    return { success: true, data: match, error: null };
   }
 }

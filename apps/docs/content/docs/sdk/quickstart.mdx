@@ -68,8 +68,9 @@ The returned `transaction` contains two instructions:
 
 Once the subscription is created on-chain:
 
-1. The **Keeper** detects it and registers it in the database
-2. After each billing interval elapses, the Keeper calls `process_payment`
+1. The **first payment is processed immediately** — no waiting for the billing interval
+2. The **Keeper** detects the subscription and registers it in the database
+3. After each subsequent billing interval elapses, the Keeper calls `process_payment`
 3. Funds are pulled from the subscriber's wallet: net amount to the merchant, platform fee to the treasury
 4. A **webhook** fires to the merchant's registered endpoint with payment details
 

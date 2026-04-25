@@ -62,7 +62,7 @@ pub mod recur {
         sub.plan_seed = plan_seed;
         sub.amount = amount;
         sub.interval = interval;
-        sub.last_payment_timestamp = now; // first pull available after `interval` seconds
+        sub.last_payment_timestamp = now.saturating_sub(interval); // first payment immediately collectible
         sub.created_at = now;
         sub.cancel_requested_at = 0; // 0 = active
         sub.bump = ctx.bumps.subscription;

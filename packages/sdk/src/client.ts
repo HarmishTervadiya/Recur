@@ -52,6 +52,7 @@ function ixDiscriminator(name: string): Buffer {
 
 const IX_INITIALIZE_SUBSCRIPTION = ixDiscriminator("initialize_subscription");
 const IX_REQUEST_CANCEL = ixDiscriminator("request_cancel");
+const IX_FINALIZE_CANCEL = ixDiscriminator("finalize_cancel");
 
 // ---------------------------------------------------------------------------
 // RecurClient
@@ -215,6 +216,51 @@ export class RecurClient {
   }
 
   /**
+   * Build an SPL Token `approve` instruction to re-delegate the subscriber's
+   * USDC ATA to an existing subscription PDA. Used when delegation is exhausted
+   * or revoked and the subscription is still active on-chain.
+   */
+  buildReapproveTransaction(
+    subscriberWallet: PublicKey,
+    options: {
+      merchantWallet: string;
+      planSeed: string;
+      amount: number;
+      delegationCycles?: number;
+    },
+  ): { subscriptionPda: PublicKey; instructions: TransactionInstruction[] } {
+    const merchantPubkey = new PublicKey(options.merchantWallet);
+    const seedBuf = planSeedToBuffer(options.planSeed);
+
+    const [subscriptionPda] = findSubscriptionPda(
+      subscriberWallet,
+      merchantPubkey,
+      seedBuf,
+      this.programId,
+    );
+
+    const subscriberAta = getAssociatedTokenAddressSync(
+      this.usdcMint,
+      subscriberWallet,
+    );
+
+    const cycles = options.delegationCycles ?? 12;
+    const delegationAmount = BigInt(options.amount) * BigInt(cycles);
+
+    const approveIx = createApproveInstruction(
+      subscriberAta,
+      subscriptionPda,
+      subscriberWallet,
+      delegationAmount,
+    );
+
+    return {
+      subscriptionPda,
+      instructions: [approveIx],
+    };
+  }
+
+  /**
    * Build the `request_cancel` instruction.
    * The authority (signer) must be either the subscriber or merchant.
    */
@@ -248,6 +294,41 @@ export class RecurClient {
     });
 
     return { instructions: [cancelIx] };
+  }
+
+  /**
+   * Build the `finalize_cancel` instruction.
+   * Permissionless — anyone can call once cancel_requested_at > 0 and the
+   * paid period has elapsed. Closes the PDA and refunds rent to subscriber.
+   */
+  buildFinalizeCancelTransaction(
+    options: CancelOptions,
+  ): CancelTransaction {
+    const subscriberPubkey = new PublicKey(options.subscriberWallet);
+    const merchantPubkey = new PublicKey(options.merchantWallet);
+    const seedBuf = planSeedToBuffer(options.planSeed);
+
+    const [subscriptionPda] = findSubscriptionPda(
+      subscriberPubkey,
+      merchantPubkey,
+      seedBuf,
+      this.programId,
+    );
+
+    const ixData = Buffer.alloc(8);
+    IX_FINALIZE_CANCEL.copy(ixData, 0);
+
+    const finalizeIx = new TransactionInstruction({
+      programId: this.programId,
+      keys: [
+        { pubkey: subscriptionPda, isSigner: false, isWritable: true },
+        { pubkey: subscriberPubkey, isSigner: false, isWritable: true },
+        { pubkey: merchantPubkey, isSigner: false, isWritable: false },
+      ],
+      data: ixData,
+    });
+
+    return { instructions: [finalizeIx] };
   }
 
   // =========================================================================
@@ -293,14 +374,16 @@ export class RecurClient {
    * Fetch all active plans for an app (public endpoint).
    */
   async getPlans(appId: string): Promise<ApiResponse<PlanInfo[]>> {
-    return this.apiFetch<PlanInfo[]>(`/public/plans?appId=${appId}`);
+    const params = new URLSearchParams({ appId });
+    return this.apiFetch<PlanInfo[]>(`/plans?${params.toString()}`);
   }
 
   /**
    * Fetch a single plan by ID with merchant info (public endpoint).
    */
-  async getPlan(planId: string): Promise<ApiResponse<PlanInfo>> {
-    return this.apiFetch<PlanInfo>(`/public/plans/${planId}`);
+  async getPlan(appId: string, planId: string): Promise<ApiResponse<PlanInfo>> {
+    const params = new URLSearchParams({ appId });
+    return this.apiFetch<PlanInfo>(`/plans/${planId}?${params.toString()}`);
   }
 
   // =========================================================================
@@ -369,7 +452,7 @@ export class RecurClient {
    * Register a newly-created on-chain subscription with the Recur API.
    * Call this after the initialize_subscription transaction confirms on-chain.
    *
-   * @param options  - planId + subscriptionPda
+   * @param options  - appId + planId + subscriptionPda
    * @param authToken - Subscriber JWT from the nonce→sign→verify auth flow
    */
   async registerSubscription(
@@ -379,6 +462,7 @@ export class RecurClient {
     return this.apiFetch<SubscriptionInfo>("/subscriber/subscriptions", {
       method: "POST",
       body: JSON.stringify({
+        appId: options.appId,
         planId: options.planId,
         subscriptionPda: options.subscriptionPda,
       }),

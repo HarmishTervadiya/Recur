@@ -102,6 +102,7 @@ router.get(
 );
 
 const RegisterSubscriptionBody = z.object({
+  appId: z.string().min(1),
   planId: z.string().cuid(),
   subscriptionPda: z.string().min(32),
 });
@@ -109,13 +110,18 @@ const RegisterSubscriptionBody = z.object({
 router.post(
   "/subscriptions",
   wrap(async (req, res) => {
-    const { planId, subscriptionPda } = RegisterSubscriptionBody.parse(
+    const { appId, planId, subscriptionPda } = RegisterSubscriptionBody.parse(
       req.body,
     );
     const subscriber = await getSubscriber(req.user!.walletAddress);
 
-    const plan = await prisma.plan.findUnique({ where: { id: planId } });
+    const plan = await prisma.plan.findFirst({
+      where: { id: planId, appId },
+      include: { app: true },
+    });
     if (!plan) throw new AppError(ErrorCode.PLAN_NOT_FOUND, "Plan not found");
+    if (!plan.app.isActive)
+      throw new AppError(ErrorCode.APP_NOT_FOUND, "App not found");
     if (!plan.isActive)
       throw new AppError(ErrorCode.PLAN_INACTIVE, "Plan is not active");
 
@@ -124,13 +130,23 @@ router.post(
       Date.now() + plan.intervalSeconds * 1000,
     );
 
-    const sub = await prisma.subscription.create({
-      data: {
+    const sub = await prisma.subscription.upsert({
+      where: { subscriptionPda },
+      create: {
         planId,
         subscriberId: subscriber.id,
         subscriptionPda,
         status: "active",
         nextPaymentDue,
+      },
+      update: {
+        planId,
+        subscriberId: subscriber.id,
+        status: "active",
+        nextPaymentDue,
+        lastPaymentAt: null,
+        cancelRequestedAt: null,
+        cancelledAt: null,
       },
       include: { plan: true },
     });

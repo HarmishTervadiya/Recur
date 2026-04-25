@@ -48,7 +48,7 @@ describe("public plan routes", () => {
 
   describe("GET /plans/:planId", () => {
     it("returns a single plan with app and merchant info", async () => {
-      prismaMock.plan.findUnique.mockResolvedValue({
+      prismaMock.plan.findFirst.mockResolvedValue({
         id: "plan1",
         appId: "app1",
         name: "Pro",
@@ -63,21 +63,34 @@ describe("public plan routes", () => {
         app: {
           id: "app1",
           name: "My App",
+          isActive: true,
           merchant: { id: "m1", name: "Acme", walletAddress: "abc" },
         },
       } as any);
 
-      const res = await request(app).get("/plans/plan1");
+      const res = await request(app).get("/plans/plan1?appId=app1");
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.amountBaseUnits).toBe("1000000");
+      expect(prismaMock.plan.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "plan1", appId: "app1" },
+        }),
+      );
+    });
+
+    it("returns 400 without appId", async () => {
+      const res = await request(app).get("/plans/plan1");
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe("MISSING_APP_ID");
     });
 
     it("returns 404 for non-existent plan", async () => {
-      prismaMock.plan.findUnique.mockResolvedValue(null);
+      prismaMock.plan.findFirst.mockResolvedValue(null);
 
-      const res = await request(app).get("/plans/nope");
+      const res = await request(app).get("/plans/nope?appId=app1");
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe("PLAN_NOT_FOUND");

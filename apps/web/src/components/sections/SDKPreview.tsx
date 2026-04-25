@@ -38,20 +38,16 @@ export function SDKPreview() {
         : "pnpm add";
 
   const handleCopy = useCallback(() => {
-    const code = `${installCmd} @recur/react
+    const code = `${installCmd} @recur/sdk
 
-import { RecurButton } from '@recur/react'
+import { RecurClient } from '@recur/sdk'
 
-export default function PricingPage() {
-  return (
-    <RecurButton
-      planId="premium_pass"
-      amount={5}
-      interval="monthly"
-      token="USDC"
-    />
-  )
-}`;
+const recur = new RecurClient({
+  rpcUrl: 'https://api.devnet.solana.com',
+  apiBaseUrl: 'https://api.recur.so'
+})
+
+const plan = await recur.getPlan(appId, planId)`;
     navigator.clipboard.writeText(code).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -64,7 +60,7 @@ export default function PricingPage() {
       content: (
         <>
           <span className="text-recur-text-heading">{installCmd}</span>{" "}
-          <span className="text-recur-success">@recur/react</span>
+          <span className="text-recur-success">@recur/sdk</span>
         </>
       ),
     },
@@ -81,11 +77,11 @@ export default function PricingPage() {
         <>
           <span className="text-recur-glow">import</span>{" "}
           <span className="text-recur-text-heading">
-            {"{ RecurButton }"}
+            {"{ RecurClient }"}
           </span>{" "}
           <span className="text-recur-glow">from</span>{" "}
           <span className="text-recur-success">
-            &apos;@recur/react&apos;
+            &apos;@recur/sdk&apos;
           </span>
         </>
       ),
@@ -94,70 +90,70 @@ export default function PricingPage() {
     {
       content: (
         <>
-          <span className="text-recur-glow">export default function</span>{" "}
-          <span className="text-recur-warning">PricingPage</span>
-          <span className="text-recur-text-heading">{"() {"}</span>
+          <span className="text-recur-glow">const</span>{" "}
+          <span className="text-recur-warning">recur</span>{" "}
+          <span className="text-recur-text-heading">= new RecurClient({"{"}</span>
         </>
       ),
     },
     {
       content: (
         <span className="pl-6">
-          <span className="text-recur-glow">return</span>{" "}
-          <span className="text-recur-text-heading">(</span>
+          <span className="text-recur-success">rpcUrl</span>
+          <span className="text-recur-text-heading">
+            : &quot;https://api.devnet.solana.com&quot;,
+          </span>
         </span>
       ),
     },
     {
       content: (
         <span className="pl-12">
-          <span className="text-recur-text-heading">&lt;</span>
-          <span className="text-recur-warning">RecurButton</span>
+          <span className="text-recur-success">apiBaseUrl</span>
+          <span className="text-recur-text-heading">
+            : &quot;https://api.recur.so&quot;,
+          </span>
         </span>
       ),
     },
     {
       content: (
         <span className="pl-16">
+          <span className="text-recur-text-heading">{"})"}</span>
+        </span>
+      ),
+    },
+    {
+      content: (
+        <span className="pl-16">
+          <span className="text-recur-glow">const</span>{" "}
+          <span className="text-recur-warning">plan</span>{" "}
+          <span className="text-recur-text-heading">= await recur.getPlan(</span>
+        </span>
+      ),
+    },
+    {
+      content: (
+        <span className="pl-16">
+          <span className="text-recur-success">appId</span>
+          <span className="text-recur-text-heading">
+            ,{" "}
+          </span>
           <span className="text-recur-success">planId</span>
-          <span className="text-recur-text-heading">
-            =&quot;premium_pass&quot;
-          </span>
         </span>
       ),
     },
     {
       content: (
         <span className="pl-16">
-          <span className="text-recur-success">amount</span>
-          <span className="text-recur-text-heading">{`={5}`}</span>
-        </span>
-      ),
-    },
-    {
-      content: (
-        <span className="pl-16">
-          <span className="text-recur-success">interval</span>
-          <span className="text-recur-text-heading">
-            =&quot;monthly&quot;
-          </span>
-        </span>
-      ),
-    },
-    {
-      content: (
-        <span className="pl-16">
-          <span className="text-recur-success">token</span>
-          <span className="text-recur-text-heading">
-            =&quot;USDC&quot;
-          </span>
+          <span className="text-recur-text-heading">)</span>
         </span>
       ),
     },
     {
       content: (
         <span className="pl-12">
-          <span className="text-recur-text-heading">/&gt;</span>
+          <span className="text-recur-text-dim">{"// build and send tx in your UI"}</span>
         </span>
       ),
     },
@@ -175,8 +171,8 @@ export default function PricingPage() {
               Three Lines. That&apos;s It.
             </h2>
             <p className="text-[15px] text-recur-text-body leading-relaxed mb-8 max-w-[440px]">
-              Install the SDK, import the component, drop it into any Solana
-              dApp. No checkout sessions, no redirect URLs, no 30-minute setup.
+              Install the SDK, verify an app-owned plan, then build the wallet
+              transaction inside your Solana dApp. No checkout sessions, no redirects.
             </p>
 
             <div className="space-y-4">
@@ -187,7 +183,7 @@ export default function PricingPage() {
                     Install
                   </div>
                   <div className="text-[12px] text-recur-text-muted font-mono mt-0.5">
-                    npm install @recur/react
+                    npm install @recur/sdk
                   </div>
                 </div>
               </div>
@@ -198,7 +194,7 @@ export default function PricingPage() {
                     Import
                   </div>
                   <div className="text-[12px] text-recur-text-muted font-mono mt-0.5">
-                    {"import { RecurButton } from '@recur/react'"}
+                    {"import { RecurClient } from '@recur/sdk'"}
                   </div>
                 </div>
               </div>
@@ -209,7 +205,7 @@ export default function PricingPage() {
                     Render
                   </div>
                   <div className="text-[12px] text-recur-text-muted font-mono mt-0.5">
-                    {'<RecurButton planId="..." amount={5} />'}
+                    {"recur.getPlan(appId, planId)"}
                   </div>
                 </div>
               </div>

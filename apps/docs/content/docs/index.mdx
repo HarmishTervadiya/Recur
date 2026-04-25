@@ -1,0 +1,36 @@
+---
+title: Introduction
+description: Non-custodial recurring payments on Solana.
+---
+
+# Recur Protocol
+
+Recur is an open-source, non-custodial recurring payment protocol built on Solana. It enables merchants to accept subscription payments in USDC without ever taking custody of subscriber funds.
+
+## How it works
+
+1. **Subscriber approves** a token delegation to a Subscription PDA
+2. **Merchant creates** a plan with amount and interval via the REST API
+3. **Subscriber subscribes** by creating an on-chain Subscription PDA
+4. **Keeper** (off-chain bot) pulls payments at each billing interval
+5. **Webhooks** notify the merchant's backend of payment events
+
+Subscribers retain full control. They can revoke the token delegation at any time, and the on-chain program enforces interval-based time locks — no early pulls, no double charges.
+
+## Key properties
+
+| Property | Detail |
+|---|---|
+| Custody | Non-custodial — funds stay in the subscriber's wallet until payment is due |
+| Token | USDC (SPL Token, 6 decimals) |
+| Network | Solana devnet (mainnet ready) |
+| Fee | $0.05 flat + 0.25% per payment, collected by the protocol treasury |
+| Minimum | $1.00 per payment |
+| Cancel | Subscriber or merchant can cancel; paid period always honored |
+
+## Quick links
+
+- [SDK Quickstart](/docs/sdk/quickstart) — integrate subscriptions in 5 minutes
+- [API Authentication](/docs/api/authentication) — wallet-based auth flow
+- [Protocol Architecture](/docs/protocol/architecture) — on-chain design and PDAs
+- [Webhooks](/docs/sdk/webhooks) — receive payment notifications

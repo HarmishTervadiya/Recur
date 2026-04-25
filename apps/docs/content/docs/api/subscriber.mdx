@@ -1,0 +1,82 @@
+---
+title: Subscriber API
+description: REST endpoints for subscriber operations.
+---
+
+# Subscriber API
+
+All subscriber endpoints require a valid JWT with `role: "subscriber"` in the
+`Authorization: Bearer <token>` header.
+
+## Subscriptions
+
+### Register a subscription
+
+After creating the on-chain subscription PDA, register it in the database so the
+Keeper can track it:
+
+```bash
+POST /subscriber/subscriptions
+Authorization: Bearer <token>
+
+{
+  "planId": "cmoe0k7nj001fcemltjf3uhca",
+  "subscriptionPda": "AZUE5JSPGXgPC3ecXFT9AUxrDa8ZagkmhySEr9HaiEcK"
+}
+```
+
+### List my subscriptions
+
+```bash
+GET /subscriber/subscriptions
+Authorization: Bearer <token>
+```
+
+### Get subscription details
+
+```bash
+GET /subscriber/subscriptions/:subscriptionId
+Authorization: Bearer <token>
+```
+
+### List subscription transactions
+
+```bash
+GET /subscriber/subscriptions/:subscriptionId/transactions
+Authorization: Bearer <token>
+```
+
+## Response format
+
+All API responses follow a consistent envelope:
+
+```json
+{
+  "success": true,
+  "data": { ... }
+}
+```
+
+Error responses:
+
+```json
+{
+  "success": false,
+  "data": null,
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Invalid or expired token"
+  }
+}
+```
+
+### Error codes
+
+| Code | HTTP Status | Description |
+|---|---|---|
+| `UNAUTHORIZED` | 401 | Missing or invalid authentication |
+| `FORBIDDEN` | 403 | Insufficient permissions for this endpoint |
+| `NOT_FOUND` | 404 | Resource does not exist |
+| `VALIDATION_ERROR` | 400 | Request body failed validation |
+| `CONFLICT` | 409 | Resource already exists |
+| `INTERNAL_ERROR` | 500 | Server error |

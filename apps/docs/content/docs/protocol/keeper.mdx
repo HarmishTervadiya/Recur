@@ -1,0 +1,75 @@
+---
+title: Keeper
+description: Off-chain automation for payment processing.
+---
+
+# Keeper
+
+The Keeper is an off-chain service that automates payment processing, cancellation
+finalization, and chain state synchronization. It runs as a background process
+alongside the API server.
+
+## Jobs
+
+| Job | Interval | Description |
+|---|---|---|
+| `processPayments` | Every 15s | Queries DB for subscriptions past `nextPaymentDue`, calls `process_payment` on-chain |
+| `finalizeCancel` | Every 15s | Closes subscriptions whose cancellation grace period has elapsed |
+| `forceCancel` | Every 5min | Checks token delegation validity; force-cancels if subscriber revoked delegation |
+| `chainScan` | Every 5min | Safety net — scans all program accounts via `getProgramAccounts` and registers missing subscriptions |
+
+## Payment processing flow
+
+```
+1. Query DB: active subscriptions where nextPaymentDue <= now
+2. For each subscription:
+   a. Fetch on-chain PDA to verify state
+   b. Build process_payment instruction
+   c. Send and confirm transaction
+   d. Report result to API (POST /keeper/payment)
+   e. API updates DB: nextPaymentDue, lastPaymentAt, transaction record
+   f. API dispatches webhook to merchant endpoint
+```
+
+## Configuration
+
+| Env var | Default | Description |
+|---|---|---|
+| `KEEPER_KEYPAIR` | — | JSON array or base58 private key |
+| `KEEPER_SECRET` | — | Shared secret for API authentication |
+| `KEEPER_BATCH_SIZE` | 20 | Max subscriptions per processing cycle |
+| `SOLANA_RPC_URL` | devnet | RPC endpoint |
+| `API_URL` | `http://localhost:3001` | Recur API base URL |
+
+## API endpoints
+
+The Keeper authenticates with the API via the `X-Keeper-Secret` header:
+
+| Endpoint | Description |
+|---|---|
+| `POST /keeper/payment` | Report a successful payment |
+| `POST /keeper/payment-failed` | Report a failed payment |
+| `POST /keeper/cancel` | Report a cancellation (request, finalize, or force) |
+| `POST /keeper/subscription` | Register a newly discovered on-chain subscription |
+
+## Running the Keeper
+
+```bash
+# Development
+bun dev:keeper
+
+# Production
+cd apps/keeper && bun start
+```
+
+The Keeper requires:
+- A funded wallet (needs SOL for transaction fees)
+- Access to the Recur API server
+- Direct database access (reads subscription records via Prisma)
+- A Solana RPC endpoint
+
+## Error handling
+
+- Failed transactions are reported to the API for tracking
+- The Keeper logs all errors but continues processing the batch
+- The `chainScan` job acts as a safety net — even if the API misses a subscription creation, the Keeper will discover it on-chain

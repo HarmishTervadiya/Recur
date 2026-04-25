@@ -1,0 +1,60 @@
+---
+title: Fee Structure
+description: Platform fees, treasury, and payment breakdown.
+---
+
+# Fee Structure
+
+Every successful payment processed by the Keeper incurs a platform fee that is
+sent directly to the Treasury Vault on-chain.
+
+## Fee calculation
+
+```
+platform_fee = $0.05 flat  +  0.25% of payment amount
+net_to_merchant = payment_amount - platform_fee
+```
+
+| Payment | Flat fee | Percent fee | Total fee | Merchant receives |
+|---|---|---|---|---|
+| $1.00 | $0.05 | $0.0025 | $0.0525 | $0.9475 |
+| $5.00 | $0.05 | $0.0125 | $0.0625 | $4.9375 |
+| $10.00 | $0.05 | $0.025 | $0.075 | $9.925 |
+| $50.00 | $0.05 | $0.125 | $0.175 | $49.825 |
+| $100.00 | $0.05 | $0.25 | $0.30 | $99.70 |
+
+## Constants
+
+| Constant | Value | Description |
+|---|---|---|
+| `PLATFORM_FLAT_FEE_BASE_UNITS` | 50,000 | $0.05 in USDC base units |
+| `PLATFORM_BPS` | 25 | 0.25% expressed as basis points |
+| `BPS_DENOMINATOR` | 10,000 | Basis point denominator |
+| `MIN_PLAN_AMOUNT_BASE_UNITS` | 1,000,000 | Minimum $1.00 per payment |
+
+## On-chain enforcement
+
+Fees are enforced on-chain in the `process_payment` instruction — not by the Keeper
+or API. The program computes the split and executes two separate `transfer_checked` CPIs:
+
+1. `subscriber_ata → merchant_ata` (payment_amount - platform_fee)
+2. `subscriber_ata → treasury_vault_ata` (platform_fee)
+
+This means:
+- The merchant cannot receive more than `amount - fee`
+- The treasury always collects its fee
+- The Keeper cannot manipulate the split
+
+## Treasury
+
+The Treasury Vault is a PDA at seeds `["treasury_vault"]` with an Associated Token
+Account that accumulates all platform fees.
+
+Withdrawals require a 2-of-2 multisig approval:
+1. One key proposes a withdrawal with amount, destination, and TTL
+2. The other key approves and executes within the TTL window
+3. Expired proposals can be cleaned up by anyone (permissionless)
+
+The multisig keys are hardcoded in the program:
+- `TREASURY_MULTISIG_A`: `Cm4LcfF5N8Whu1pV3mYcLUuzdjhUhbhNt5GHz62vPGDM`
+- `TREASURY_MULTISIG_B`: `36RtRqX9fzFQYShzacRZKtfJB8uf8MqJbKkXSKvYUMPt`

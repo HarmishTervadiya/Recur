@@ -2,6 +2,7 @@ import { Router, type Router as ExpressRouter } from "express";
 import { z } from "zod";
 import crypto from "crypto";
 import { prisma } from "@recur/db";
+import { EventTypeSchema } from "@recur/types";
 import { authenticate, requireMerchant } from "../../middleware/auth.js";
 import { wrap, AppError } from "../../middleware/errors.js";
 import { ok, okPaginated, parsePagination } from "../../middleware/response.js";
@@ -250,15 +251,9 @@ router.get(
 
 const CreateWebhookBody = z.object({
   url: z.string().url(),
-  events: z.array(z.enum([
-    "subscription_created",
-    "payment_success",
-    "payment_failed",
-    "cancel_requested",
-    "cancel_finalized",
-    "cancel_forced",
-    "delegation_revoked",
-  ])).default([]),
+  // Validate each event string against the known EventType enum.
+  // Rejects unknown strings (e.g. typos like "payment_sucess") at the API boundary.
+  events: z.array(EventTypeSchema).default([]),
 });
 
 router.post(

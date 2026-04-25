@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --fd-primary: 265 80% 58%;
+  --fd-background: 0 0% 96%;
+  --fd-foreground: 260 30% 10%;
+  --fd-muted: 260 15% 92%;
+  --fd-muted-foreground: 260 10% 40%;
+  --fd-card: 260 20% 95%;
+  --fd-card-foreground: 260 30% 10%;
+  --fd-border: 260 20% 86%;
+  --fd-ring: 265 80% 58%;
+  --fd-accent: 265 60% 94%;
+  --fd-accent-foreground: 265 80% 40%;
+}
+
+.dark {
+  --fd-primary: 265 80% 65%;
+  --fd-background: 240 30% 4%;
+  --fd-foreground: 240 10% 97%;
+  --fd-muted: 240 20% 14%;
+  --fd-muted-foreground: 240 10% 55%;
+  --fd-card: 240 25% 7%;
+  --fd-card-foreground: 240 10% 97%;
+  --fd-border: 240 20% 16%;
+  --fd-ring: 265 80% 65%;
+  --fd-accent: 265 40% 15%;
+  --fd-accent-foreground: 265 80% 75%;
+}

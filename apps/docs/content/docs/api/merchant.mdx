@@ -1,0 +1,147 @@
+---
+title: Merchant API
+description: REST endpoints for merchant operations.
+---
+
+# Merchant API
+
+All merchant endpoints require a valid JWT with `role: "merchant"` in the
+`Authorization: Bearer <token>` header.
+
+## Apps
+
+### Create an app
+
+```bash
+POST /merchant/apps
+Authorization: Bearer <token>
+
+{ "name": "My SaaS App" }
+```
+
+### List apps
+
+```bash
+GET /merchant/apps
+Authorization: Bearer <token>
+```
+
+### Get app details
+
+```bash
+GET /merchant/apps/:appId
+Authorization: Bearer <token>
+```
+
+## Plans
+
+### Create a plan
+
+```bash
+POST /merchant/apps/:appId/plans
+Authorization: Bearer <token>
+
+{
+  "name": "Pro Monthly",
+  "description": "Full access",
+  "amountBaseUnits": "5000000",
+  "intervalSeconds": 2592000
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | Yes | Plan display name |
+| `description` | string | No | Plan description |
+| `amountBaseUnits` | string | Yes | USDC amount (6 decimals). Min: 1000000 ($1.00) |
+| `intervalSeconds` | number | Yes | Billing interval in seconds |
+
+### List plans
+
+```bash
+GET /merchant/apps/:appId/plans?page=1&limit=20
+Authorization: Bearer <token>
+```
+
+## API Keys
+
+### Create an API key
+
+```bash
+POST /merchant/apps/:appId/api-keys
+Authorization: Bearer <token>
+
+{ "name": "Production Key" }
+```
+
+Returns the full API key once. Store it securely — it cannot be retrieved again.
+
+### List API keys
+
+```bash
+GET /merchant/apps/:appId/api-keys
+Authorization: Bearer <token>
+```
+
+Returns key metadata (name, prefix, created date) but not the full key.
+
+### Revoke an API key
+
+```bash
+DELETE /merchant/apps/:appId/api-keys/:keyId
+Authorization: Bearer <token>
+```
+
+## Webhooks
+
+### Create a webhook endpoint
+
+```bash
+POST /merchant/apps/:appId/webhooks
+Authorization: Bearer <token>
+
+{
+  "url": "https://example.com/webhooks/recur",
+  "events": ["payment.success", "payment.failed", "subscription.cancelled"]
+}
+```
+
+Returns the webhook `id` and `secret`. The secret is used for HMAC signature
+verification. Store it securely.
+
+Limited to **1 webhook endpoint per app**.
+
+### List webhook endpoints
+
+```bash
+GET /merchant/apps/:appId/webhooks
+Authorization: Bearer <token>
+```
+
+### Delete a webhook endpoint
+
+```bash
+DELETE /merchant/apps/:appId/webhooks/:webhookId
+Authorization: Bearer <token>
+```
+
+## Transactions
+
+### List app transactions
+
+```bash
+GET /merchant/apps/:appId/transactions?page=1&limit=50
+Authorization: Bearer <token>
+```
+
+Returns payment history for all subscriptions under the app, including
+`amountGross`, `platformFee`, `amountNet`, `txSignature`, and `status`.
+
+## Subscriptions
+
+### List app subscriptions
+
+```bash
+GET /merchant/apps/:appId/subscriptions?page=1&limit=50&status=active
+Authorization: Bearer <token>
+```

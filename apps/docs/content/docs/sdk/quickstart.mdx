@@ -1,0 +1,81 @@
+---
+title: Quickstart
+description: Install the SDK and create your first subscription in 5 minutes.
+---
+
+# Quickstart
+
+## Installation
+
+```bash title="Terminal"
+npm install @recur/sdk @solana/web3.js @solana/spl-token
+```
+
+## Initialize the client
+
+```typescript title="recur.ts"
+import { RecurClient } from "@recur/sdk";
+
+const recur = new RecurClient({
+  rpcUrl: "https://api.devnet.solana.com",
+  // Optional: override defaults
+  // programId: "3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx",
+  // usdcMint: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+  // apiBaseUrl: "https://api.recur.so",
+});
+```
+
+## Subscribe a user
+
+Build a transaction that creates an on-chain subscription. The subscriber signs
+it in their wallet — no backend needed.
+
+```typescript title="subscribe.ts"
+import { RecurClient } from "@recur/sdk";
+import { Connection, PublicKey } from "@solana/web3.js";
+
+const recur = new RecurClient({
+  rpcUrl: "https://api.devnet.solana.com",
+});
+
+// Merchant wallet and plan details (from your backend/API)
+const merchantWallet = new PublicKey("MERCHANT_WALLET_ADDRESS");
+const planSeed = "0100000000000000"; // hex-encoded 8-byte plan seed
+const amount = 5_000_000;  // $5.00 USDC
+const interval = 2_592_000; // 30 days in seconds
+
+// Build the transaction (returns instructions, not yet signed)
+const { transaction, subscriptionPda, bump } =
+  await recur.buildSubscribeTransaction({
+    subscriber: subscriberWallet.publicKey,
+    merchant: merchantWallet,
+    planSeed,
+    amount,
+    interval,
+  });
+
+// Send to the subscriber's wallet for signing
+// (in a frontend app, use wallet adapter's sendTransaction)
+const signature = await sendTransaction(transaction, connection);
+```
+
+The returned `transaction` contains two instructions:
+
+1. **SPL Token `approve`** — delegates tokens to the Subscription PDA
+2. **`initialize_subscription`** — creates the on-chain PDA with amount, interval, and plan seed
+
+## What happens next
+
+Once the subscription is created on-chain:
+
+1. The **Keeper** detects it and registers it in the database
+2. After each billing interval elapses, the Keeper calls `process_payment`
+3. Funds are pulled from the subscriber's wallet: net amount to the merchant, platform fee to the treasury
+4. A **webhook** fires to the merchant's registered endpoint with payment details
+
+## Next steps
+
+- [Subscribe](/docs/sdk/subscribe) — full subscribe API reference
+- [Cancel](/docs/sdk/cancel) — let subscribers cancel
+- [Webhooks](/docs/sdk/webhooks) — handle payment notifications in your backend
+- [Plans](/docs/sdk/plans) — create and manage plans via the API

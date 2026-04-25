@@ -1,0 +1,84 @@
+---
+title: Plans
+description: Create and manage subscription plans via the SDK.
+---
+
+# Plans
+
+Plans define the billing terms for subscriptions — amount, interval, and metadata.
+They are created through the REST API and stored in the Recur database.
+
+## Create a plan
+
+```typescript title="create-plan.ts"
+const recur = new RecurClient({
+  rpcUrl: "https://api.devnet.solana.com",
+  apiBaseUrl: "https://api.recur.so",
+});
+
+const plan = await recur.createPlan(
+  {
+    name: "Pro Monthly",
+    description: "Full access to all features",
+    amountBaseUnits: "5000000", // $5.00 USDC
+    intervalSeconds: 2592000,   // 30 days
+  },
+  appId,   // your app ID from the dashboard
+  apiKey,  // your API key
+);
+
+console.log(plan.id);       // "cmoe0k7nj001fcemltjf3uhca"
+console.log(plan.planSeed); // "0100000000000000"
+```
+
+The returned `planSeed` is the 8-byte hex string used to derive subscription PDAs.
+Pass it to `buildSubscribeTransaction` when subscribers sign up.
+
+## List plans
+
+```typescript
+const plans = await recur.listPlans(appId, apiKey, {
+  page: 1,
+  limit: 20,
+});
+
+for (const plan of plans) {
+  console.log(`${plan.name}: $${Number(plan.amountBaseUnits) / 1e6}/mo`);
+}
+```
+
+## Get a single plan
+
+```typescript
+const plan = await recur.getPlan(planId, apiKey);
+```
+
+## Plan fields
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Unique plan identifier |
+| `appId` | `string` | The app this plan belongs to |
+| `name` | `string` | Display name |
+| `description` | `string?` | Optional description |
+| `amountBaseUnits` | `string` | Amount in USDC base units (6 decimals) |
+| `intervalSeconds` | `number` | Billing interval in seconds |
+| `currency` | `string` | Always `"USDC"` |
+| `planSeed` | `string` | 16-char hex seed for PDA derivation |
+| `isActive` | `boolean` | Whether the plan accepts new subscriptions |
+| `createdAt` | `string` | ISO 8601 timestamp |
+
+## Plan seed
+
+Each plan gets a unique 8-byte seed derived from its database ID. This seed is used
+in the PDA derivation: `["subscription", subscriber, merchant, plan_seed]`.
+
+The seed ensures a subscriber can have separate subscriptions to different plans from
+the same merchant — each plan produces a different PDA.
+
+```typescript
+import { planSeedToBuffer, findSubscriptionPda } from "@recur/sdk";
+
+const seedBuf = planSeedToBuffer(plan.planSeed);
+const [pda] = findSubscriptionPda(subscriber, merchant, seedBuf);
+```

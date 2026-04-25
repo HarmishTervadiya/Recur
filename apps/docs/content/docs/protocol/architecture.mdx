@@ -1,0 +1,108 @@
+---
+title: Architecture
+description: On-chain program design — PDAs, instructions, and account layout.
+---
+
+# Architecture
+
+Recur Protocol is an Anchor program deployed on Solana. It uses Program Derived
+Addresses (PDAs) to manage subscription state and SPL Token delegation for
+non-custodial fund access.
+
+**Program ID:** `3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx`
+
+## PDAs
+
+### Subscription PDA
+
+Seeds: `["subscription", subscriber, merchant, plan_seed]`
+
+Each subscriber–merchant–plan combination has exactly one PDA. The PDA serves two
+purposes:
+
+1. **State storage** — holds the subscription parameters (amount, interval, timestamps)
+2. **Token delegate** — the subscriber delegates USDC to this PDA, which signs
+   transfer CPIs during payment processing
+
+### Treasury Vault PDA
+
+Seeds: `["treasury_vault"]`
+
+Singleton PDA that holds the treasury configuration (proposal count, bump). Its
+Associated Token Account receives platform fees from every payment.
+
+### Withdrawal Proposal PDA
+
+Seeds: `["withdrawal_proposal", proposer, nonce]`
+
+Created by one multisig key, approved by the other. Auto-incrementing nonce prevents
+seed collisions.
+
+## Account layout
+
+### Subscription (121 bytes + 8 discriminator)
+
+| Offset | Size | Field | Type |
+|---|---|---|---|
+| 8 | 32 | subscriber | Pubkey |
+| 40 | 32 | merchant | Pubkey |
+| 72 | 8 | plan_seed | [u8; 8] |
+| 80 | 8 | amount | u64 |
+| 88 | 8 | interval | u64 |
+| 96 | 8 | last_payment_timestamp | u64 |
+| 104 | 8 | created_at | u64 |
+| 112 | 8 | cancel_requested_at | u64 |
+| 120 | 1 | bump | u8 |
+
+## Instructions
+
+### Subscription lifecycle
+
+| Instruction | Signer | Description |
+|---|---|---|
+| `initialize_subscription` | Subscriber | Create PDA, set amount/interval/plan_seed |
+| `process_payment` | Keeper | Pull funds: subscriber → merchant (net) + treasury (fee) |
+| `request_cancel` | Subscriber or Merchant | Flag subscription for cancellation |
+| `finalize_cancel` | Permissionless | Close PDA after paid period elapses, refund rent |
+| `force_cancel` | Keeper | Close PDA when delegation is revoked |
+
+### Treasury management
+
+| Instruction | Signer | Description |
+|---|---|---|
+| `initialize_treasury` | Multisig A or B | Create treasury vault PDA + ATA |
+| `propose_withdrawal` | Multisig A or B | Create a withdrawal proposal |
+| `approve_withdrawal` | Other multisig key | Execute the withdrawal (2-of-2) |
+| `cancel_proposal` | Proposer | Cancel own proposal |
+| `cleanup_expired_proposal` | Permissionless | Clean up expired proposals |
+
+## Payment flow
+
+```
+┌─────────────┐      ┌──────────────┐      ┌───────────────┐
+│  Subscriber  │      │   Program    │      │   Merchant    │
+│  USDC ATA    │─────>│  (PDA signs  │─────>│   USDC ATA    │
+│              │      │   CPI)       │      │               │
+└─────────────┘      │              │      └───────────────┘
+                      │              │
+                      │              │      ┌───────────────┐
+                      │              │─────>│   Treasury     │
+                      │              │      │   USDC ATA    │
+                      └──────────────┘      └───────────────┘
+
+        amount - fee ──────────────────> merchant
+                fee ──────────────────> treasury
+```
+
+The Subscription PDA acts as the delegate authority. When the Keeper calls
+`process_payment`, the program uses `transfer_checked` with PDA signer seeds
+to move USDC from the subscriber's ATA to both the merchant and treasury.
+
+## Security properties
+
+1. **Non-custodial** — funds never leave the subscriber's wallet until payment is due
+2. **Time-locked** — `interval` must fully elapse between payments; no early pulls
+3. **Subscriber-controlled** — revoking the token delegation immediately stops payments
+4. **Cancellation-safe** — cancel sets a flag; the already-paid period is always honored
+5. **Rent refund** — PDA rent returns to the subscriber on cancellation
+6. **2-of-2 treasury** — withdrawals require both multisig keys to approve

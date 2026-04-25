@@ -1,0 +1,141 @@
+---
+title: Subscribe
+description: Build and send subscribe transactions.
+---
+
+# Subscribe
+
+The `buildSubscribeTransaction` method creates a transaction that initializes an on-chain
+Subscription PDA and delegates the subscriber's USDC tokens to it.
+
+## Method signature
+
+```typescript
+const result = await recur.buildSubscribeTransaction(options: SubscribeOptions);
+```
+
+### Parameters
+
+| Field | Type | Description |
+|---|---|---|
+| `subscriber` | `PublicKey` | The subscriber's wallet address (must sign) |
+| `merchant` | `PublicKey` | The merchant's wallet address |
+| `planSeed` | `string` | 16-char hex string (8 bytes) identifying the plan |
+| `amount` | `number` | Payment amount in USDC base units (6 decimals). `5_000_000` = $5.00 |
+| `interval` | `number` | Billing interval in seconds. `2_592_000` = 30 days |
+| `cycles` | `number?` | Number of billing cycles to approve. Default: `undefined` (approves max) |
+
+### Return value
+
+```typescript
+interface SubscribeTransaction {
+  transaction: Transaction;
+  subscriptionPda: PublicKey;
+  bump: number;
+}
+```
+
+| Field | Description |
+|---|---|
+| `transaction` | Unsigned Solana `Transaction` with approve + initialize instructions |
+| `subscriptionPda` | The derived PDA address for this subscription |
+| `bump` | The PDA bump seed (useful for verification) |
+
+## Transaction contents
+
+The returned transaction contains exactly **2 instructions**:
+
+### 1. SPL Token Approve
+
+Delegates USDC from the subscriber's Associated Token Account (ATA) to the Subscription PDA.
+
+- **Amount**: `cycles × amount` if cycles is specified, otherwise the full balance delegation
+- **Delegate**: the Subscription PDA
+- **Owner**: the subscriber (signer)
+
+### 2. Initialize Subscription
+
+Creates the on-chain Subscription PDA with seeds `["subscription", subscriber, merchant, plan_seed]`.
+
+**Instruction data** (32 bytes):
+- Bytes 0–7: Anchor discriminator for `initialize_subscription`
+- Bytes 8–15: amount (u64 LE)
+- Bytes 16–23: interval (u64 LE)
+- Bytes 24–31: plan_seed ([u8; 8])
+
+**Accounts**:
+
+| # | Account | Signer | Writable | Description |
+|---|---|---|---|---|
+| 0 | Subscription PDA | | Yes | New account to be initialized |
+| 1 | Subscriber | Yes | Yes | Pays rent (~0.002 SOL) |
+| 2 | Merchant | | | Merchant wallet (unchecked) |
+| 3 | System Program | | | Required for account creation |
+
+## PDA derivation
+
+The subscription PDA is derived deterministically:
+
+```typescript
+import { findSubscriptionPda, planSeedToBuffer } from "@recur/sdk";
+
+const planSeedBuf = planSeedToBuffer("0100000000000000");
+
+const [pda, bump] = findSubscriptionPda(
+  subscriberPubkey,
+  merchantPubkey,
+  planSeedBuf,
+);
+```
+
+Seeds: `["subscription", subscriber.toBytes(), merchant.toBytes(), plan_seed]`
+
+This means each subscriber–merchant–plan combination has exactly one subscription PDA. Attempting to create a duplicate will fail with an "already in use" error.
+
+## Example: React integration
+
+```typescript title="useSubscribe.ts"
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { RecurClient } from "@recur/sdk";
+
+export function useSubscribe() {
+  const { connection } = useConnection();
+  const { publicKey, sendTransaction } = useWallet();
+
+  const subscribe = async (
+    merchant: PublicKey,
+    planSeed: string,
+    amount: number,
+    interval: number,
+  ) => {
+    if (!publicKey) throw new Error("Wallet not connected");
+
+    const recur = new RecurClient({
+      rpcUrl: connection.rpcEndpoint,
+    });
+
+    const { transaction } = await recur.buildSubscribeTransaction({
+      subscriber: publicKey,
+      merchant,
+      planSeed,
+      amount,
+      interval,
+    });
+
+    const signature = await sendTransaction(transaction, connection);
+    await connection.confirmTransaction(signature, "confirmed");
+    return signature;
+  };
+
+  return { subscribe };
+}
+```
+
+## Error cases
+
+| Error | Cause |
+|---|---|
+| `InvalidAmount` | Amount is below $1.00 (1,000,000 base units) |
+| `InvalidInterval` | Interval is 0 |
+| Account already in use | Subscription PDA already exists for this subscriber–merchant–plan |
+| Insufficient SOL | Subscriber needs ~0.002 SOL for PDA rent |

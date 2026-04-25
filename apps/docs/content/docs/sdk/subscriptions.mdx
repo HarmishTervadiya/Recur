@@ -1,0 +1,84 @@
+---
+title: Subscriptions
+description: Query and manage subscriptions via the SDK.
+---
+
+# Subscriptions
+
+Query subscription data for your app — active subscribers, payment history, and status.
+
+## List subscriptions
+
+```typescript
+const subscriptions = await recur.listSubscriptions(appId, apiKey, {
+  page: 1,
+  limit: 50,
+  status: "active", // "active" | "cancelled" | "expired"
+});
+```
+
+## Get payment history
+
+```typescript
+const transactions = await recur.getPaymentHistory(appId, apiKey, {
+  page: 1,
+  limit: 100,
+});
+
+for (const tx of transactions) {
+  console.log(
+    `${tx.txSignature}: $${Number(tx.amountNet) / 1e6} net (${tx.status})`,
+  );
+}
+```
+
+## Read on-chain state
+
+Fetch the raw on-chain subscription account data directly from Solana:
+
+```typescript
+const account = await recur.getSubscriptionAccount(subscriptionPda);
+
+if (account) {
+  console.log("subscriber:", account.subscriber.toBase58());
+  console.log("merchant:", account.merchant.toBase58());
+  console.log("amount:", account.amount.toString());
+  console.log("interval:", account.interval.toString());
+  console.log("last payment:", new Date(Number(account.lastPaymentTimestamp) * 1000));
+  console.log("cancel requested:", account.cancelRequestedAt > 0n);
+}
+```
+
+### On-chain fields
+
+| Field | Type | Description |
+|---|---|---|
+| `subscriber` | `PublicKey` | Subscriber wallet |
+| `merchant` | `PublicKey` | Merchant wallet |
+| `planSeed` | `Buffer` | 8-byte plan seed |
+| `amount` | `bigint` | USDC base units per interval |
+| `interval` | `bigint` | Seconds between payments |
+| `lastPaymentTimestamp` | `bigint` | Unix timestamp of last successful pull |
+| `createdAt` | `bigint` | Unix timestamp of PDA creation |
+| `cancelRequestedAt` | `bigint` | 0 = active, non-zero = cancel timestamp |
+| `bump` | `number` | PDA bump seed |
+
+## Derive a PDA
+
+If you know the subscriber, merchant, and plan seed, derive the PDA without an API call:
+
+```typescript
+const pda = recur.deriveSubscriptionPda(subscriber, merchant, planSeed);
+```
+
+This is equivalent to:
+
+```typescript
+import { findSubscriptionPda, planSeedToBuffer } from "@recur/sdk";
+
+const [pda, bump] = findSubscriptionPda(
+  subscriber,
+  merchant,
+  planSeedToBuffer(planSeed),
+);
+```

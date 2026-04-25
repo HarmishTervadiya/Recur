@@ -1,0 +1,127 @@
+---
+title: Authentication
+description: Wallet-based authentication for the Recur API.
+---
+
+# Authentication
+
+Recur uses a challenge-response authentication flow based on Solana wallet signatures.
+No passwords, no emails — just your wallet.
+
+## Flow
+
+```
+1. POST /auth/nonce    →  get a challenge message
+2. Sign the message with your wallet
+3. POST /auth/verify   →  exchange signature for JWT tokens
+4. Use the access token in the Authorization header
+```
+
+## Step 1: Request a nonce
+
+```bash
+POST /auth/nonce
+Content-Type: application/json
+
+{
+  "walletAddress": "CL9gAAiFQJ5WZZDWN82wGegVCi2WzQHpeHLebt5gGNss",
+  "role": "merchant"
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "nonce": "a1b2c3d4e5f6...",
+    "message": "Sign this message to authenticate with Recur:\n\nNonce: a1b2c3d4e5f6..."
+  }
+}
+```
+
+## Step 2: Sign the message
+
+In the browser, use the Solana wallet adapter:
+
+```typescript
+const messageBytes = new TextEncoder().encode(message);
+const signature = await wallet.signMessage(messageBytes);
+const signatureB58 = bs58.encode(signature);
+```
+
+On the server (for testing):
+
+```typescript
+import nacl from "tweetnacl";
+import bs58 from "bs58";
+
+const messageBytes = new TextEncoder().encode(message);
+const signature = nacl.sign.detached(messageBytes, keypair.secretKey);
+const signatureB58 = bs58.encode(signature);
+```
+
+## Step 3: Verify and get tokens
+
+```bash
+POST /auth/verify
+Content-Type: application/json
+
+{
+  "walletAddress": "CL9gAAiFQJ5WZZDWN82wGegVCi2WzQHpeHLebt5gGNss",
+  "role": "merchant",
+  "nonce": "a1b2c3d4e5f6...",
+  "signature": "BASE58_SIGNATURE"
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "accessToken": "eyJhbGci...",
+    "refreshToken": "eyJhbGci..."
+  }
+}
+```
+
+## Step 4: Use the access token
+
+Include the access token in the `Authorization` header:
+
+```bash
+GET /merchant/apps
+Authorization: Bearer eyJhbGci...
+```
+
+## Token lifecycle
+
+| Token | TTL | Purpose |
+|---|---|---|
+| Access token | 15 minutes | Authenticates API requests |
+| Refresh token | 7 days | Obtains new access tokens |
+
+### Refresh
+
+```bash
+POST /auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "eyJhbGci..."
+}
+```
+
+Returns a new `accessToken` and `refreshToken` pair.
+
+## Roles
+
+| Role | Endpoints |
+|---|---|
+| `merchant` | `/merchant/*` — apps, plans, webhooks, transactions |
+| `subscriber` | `/subscriber/*` — subscriptions, transaction history |
+
+A wallet can authenticate as both roles. The JWT includes the role and entity ID.

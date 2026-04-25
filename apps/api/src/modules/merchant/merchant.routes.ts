@@ -250,7 +250,15 @@ router.get(
 
 const CreateWebhookBody = z.object({
   url: z.string().url(),
-  events: z.array(z.string()).default([]),
+  events: z.array(z.enum([
+    "subscription_created",
+    "payment_success",
+    "payment_failed",
+    "cancel_requested",
+    "cancel_finalized",
+    "cancel_forced",
+    "delegation_revoked",
+  ])).default([]),
 });
 
 router.post(
@@ -281,7 +289,7 @@ router.post(
       },
     });
 
-    // Return the raw secret once — it's stored hashed.
+    // Return the raw secret once — stored as plaintext for HMAC signing.
     ok(res, { ...endpoint, secret: rawSecret }, 201);
   }),
 );

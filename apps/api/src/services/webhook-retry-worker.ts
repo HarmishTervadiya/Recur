@@ -1,8 +1,8 @@
-import crypto from "crypto";
 import axios from "axios";
 import { prisma } from "@recur/db";
 import { createLogger } from "@recur/logger";
 import type { WebhookPayload } from "@recur/types";
+import { signPayload } from "./webhook-dispatcher.js";
 
 const logger = createLogger("webhook-retry-worker");
 
@@ -52,11 +52,7 @@ async function retryFailedDeliveries(): Promise<void> {
       const payload = delivery.payload as unknown as WebhookPayload;
       const body = JSON.stringify(payload);
       const timestamp = Math.floor(Date.now() / 1000).toString();
-      const hmac = crypto
-        .createHmac("sha256", endpoint.secret)
-        .update(body)
-        .digest("hex");
-      const signature = `sha256=${hmac}`;
+      const signature = signPayload(body, endpoint.secret, timestamp);
 
       let success = false;
       let httpStatusCode: number | null = null;
@@ -94,9 +90,12 @@ async function retryFailedDeliveries(): Promise<void> {
         logger.info({ deliveryId: delivery.id, attempts: newAttempts }, "Webhook delivery succeeded on retry");
       } else {
         const abandoned = newAttempts >= MAX_ATTEMPTS;
+        // Use delivery.attempts (before increment) as backoff index:
+        // attempt 1 failed -> backoff[1] = 5m, attempt 2 -> backoff[2] = 30m, etc.
+        const backoffIndex = Math.min(delivery.attempts, BACKOFF_MS.length - 1);
         const nextRetry = abandoned
           ? null
-          : new Date(attemptedAt.getTime() + (BACKOFF_MS[newAttempts] ?? BACKOFF_MS[BACKOFF_MS.length - 1]!));
+          : new Date(attemptedAt.getTime() + BACKOFF_MS[backoffIndex]!);
 
         await prisma.webhookDelivery.update({
           where: { id: delivery.id },
@@ -125,6 +124,10 @@ async function retryFailedDeliveries(): Promise<void> {
  */
 export function startWebhookRetryWorker(): void {
   logger.info("Webhook retry worker started");
+  // Run immediately on startup to clear any backlog
+  retryFailedDeliveries().catch((err) => {
+    logger.error({ err }, "Webhook retry worker initial run error");
+  });
   setInterval(() => {
     retryFailedDeliveries().catch((err) => {
       logger.error({ err }, "Webhook retry worker error");

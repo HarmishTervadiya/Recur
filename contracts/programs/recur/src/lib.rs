@@ -216,6 +216,24 @@ pub mod recur {
         Ok(())
     }
 
+    /// Immediately close a Subscription PDA at the subscriber's request.
+    ///
+    /// Only callable by the subscriber (enforced by checking `authority` against
+    /// `subscription.subscriber`). No time check, no waiting period — the
+    /// subscriber may exit the autopay relationship at any moment and forfeits
+    /// any remaining prepaid time. Rent lamports are refunded to the subscriber.
+    ///
+    /// Note: The merchant cannot call this. Merchants who want to cancel must
+    /// use the existing `request_cancel` + `finalize_cancel` flow which respects
+    /// the paid-period window.
+    pub fn subscriber_cancel(ctx: Context<SubscriberCancel>) -> Result<()> {
+        require!(
+            ctx.accounts.authority.key() == ctx.accounts.subscription.subscriber,
+            RecurError::UnauthorizedCancellation
+        );
+        Ok(()) // Anchor `close = subscriber` handles lamport transfer + zero-out.
+    }
+
     // -----------------------------------------------------------------------
     // Treasury instructions
     // -----------------------------------------------------------------------
@@ -517,6 +535,31 @@ pub struct ForceCancel<'info> {
 
     /// Only the registered Keeper may force-cancel.
     pub keeper: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct SubscriberCancel<'info> {
+    #[account(
+        mut,
+        close = subscriber,
+        seeds = [b"subscription", subscriber.key().as_ref(), merchant.key().as_ref(), &subscription.plan_seed],
+        bump = subscription.bump,
+        has_one = subscriber,
+        has_one = merchant,
+    )]
+    pub subscription: Account<'info, Subscription>,
+
+    /// Must be the subscriber. Identity enforced in instruction logic via
+    /// `authority.key() == subscription.subscriber`.
+    pub authority: Signer<'info>,
+
+    /// Rent refund destination (subscriber paid rent). Identity enforced by `has_one`.
+    #[account(mut)]
+    /// CHECK: Verified by `has_one = subscriber`.
+    pub subscriber: AccountInfo<'info>,
+
+    /// CHECK: Identity enforced by `has_one`.
+    pub merchant: AccountInfo<'info>,
 }
 
 // ---------------------------------------------------------------------------

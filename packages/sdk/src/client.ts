@@ -53,6 +53,7 @@ function ixDiscriminator(name: string): Buffer {
 const IX_INITIALIZE_SUBSCRIPTION = ixDiscriminator("initialize_subscription");
 const IX_REQUEST_CANCEL = ixDiscriminator("request_cancel");
 const IX_FINALIZE_CANCEL = ixDiscriminator("finalize_cancel");
+const IX_SUBSCRIBER_CANCEL = ixDiscriminator("subscriber_cancel");
 
 // ---------------------------------------------------------------------------
 // RecurClient
@@ -329,6 +330,41 @@ export class RecurClient {
     });
 
     return { instructions: [finalizeIx] };
+  }
+
+  /**
+   * Build the `subscriber_cancel` instruction.
+   * Subscriber-only — closes the PDA immediately, refunds rent to subscriber.
+   * Subscriber forfeits any prepaid time. No time check, no merchant approval.
+   */
+  buildSubscriberCancelTransaction(
+    subscriberWallet: PublicKey,
+    options: { merchantWallet: string; planSeed: string },
+  ): CancelTransaction {
+    const merchantPubkey = new PublicKey(options.merchantWallet);
+    const seedBuf = planSeedToBuffer(options.planSeed);
+
+    const [subscriptionPda] = findSubscriptionPda(
+      subscriberWallet,
+      merchantPubkey,
+      seedBuf,
+      this.programId,
+    );
+
+    const ixData = Buffer.alloc(8);
+    IX_SUBSCRIBER_CANCEL.copy(ixData, 0);
+
+    const cancelIx = new TransactionInstruction({
+      programId: this.programId,
+      keys: [
+        { pubkey: subscriptionPda, isSigner: false, isWritable: true },
+        { pubkey: subscriberWallet, isSigner: true, isWritable: true },
+        { pubkey: merchantPubkey, isSigner: false, isWritable: false },
+      ],
+      data: ixData,
+    });
+
+    return { instructions: [cancelIx] };
   }
 
   // =========================================================================

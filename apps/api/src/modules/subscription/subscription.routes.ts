@@ -5,6 +5,10 @@ import { authenticate, requireSubscriber } from "../../middleware/auth.js";
 import { wrap, AppError } from "../../middleware/errors.js";
 import { ok, okPaginated, parsePagination } from "../../middleware/response.js";
 import { ErrorCode } from "../../errors.js";
+import { dispatchWebhook } from "../../services/webhook-dispatcher.js";
+import { createLogger } from "@recur/logger";
+
+const logger = createLogger("subscriber-api");
 
 const router: ExpressRouter = Router();
 
@@ -186,6 +190,81 @@ router.get(
       transactions,
       { page, pageSize: limit, total, totalPages: Math.ceil(total / limit) },
     );
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// POST /subscriber/subscriptions/:subId/cancel
+//
+// Subscriber-initiated instant cancel. Called by the merchant dApp AFTER the
+// on-chain `subscriber_cancel` instruction has confirmed and the PDA is
+// closed. Sets status=cancelled and dispatches the cancel_finalized webhook.
+//
+// The keeper's forceCancel job is the backup detector if this call fails.
+// ---------------------------------------------------------------------------
+
+const SubscriberCancelBody = z.object({
+  txSignature: z.string().min(64).max(128).optional(),
+});
+
+router.post(
+  "/subscriptions/:subId/cancel",
+  wrap(async (req, res) => {
+    const { txSignature } = SubscriberCancelBody.parse(req.body ?? {});
+    const subscriber = await getSubscriber(req.user!.walletAddress);
+
+    const sub = await prisma.subscription.findFirst({
+      where: { id: req.params["subId"], subscriberId: subscriber.id },
+      include: { plan: true },
+    });
+    if (!sub)
+      throw new AppError(
+        ErrorCode.SUBSCRIPTION_NOT_FOUND,
+        "Subscription not found",
+      );
+
+    // Idempotent: if already cancelled, just return current state
+    if (sub.status === "cancelled") {
+      ok(res, sub);
+      return;
+    }
+
+    const now = new Date();
+    const updated = await prisma.subscription.update({
+      where: { id: sub.id },
+      data: {
+        status: "cancelled",
+        cancelledAt: now,
+        cancelRequestedAt: sub.cancelRequestedAt ?? now,
+        nextPaymentDue: null,
+      },
+      include: { plan: true },
+    });
+
+    await prisma.subscriptionEvent.create({
+      data: {
+        subscriptionId: sub.id,
+        eventType: "cancel_finalized",
+        metadata: { source: "subscriber", txSignature: txSignature ?? null },
+      },
+    });
+
+    logger.info(
+      { subId: sub.id, pda: sub.subscriptionPda, txSignature },
+      "Subscriber-initiated cancel confirmed",
+    );
+
+    void dispatchWebhook(sub.plan.appId, "cancel_finalized", {
+      subscriptionId: sub.id,
+      subscriptionPda: sub.subscriptionPda,
+      cancelType: "subscriber",
+      confirmedAt: now.toISOString(),
+      txSignature: txSignature ?? null,
+    }).catch((err) =>
+      logger.error({ err }, "Webhook dispatch failed for subscriber cancel"),
+    );
+
+    ok(res, updated);
   }),
 );
 

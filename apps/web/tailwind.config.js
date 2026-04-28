@@ -13,17 +13,13 @@ module.exports = {
           border: "var(--recur-border)",
           "border-light": "var(--recur-border-light)",
 
-          "deep-purple": "#4C1D95",
-          primary: "#7C3AED",
-          "mid-purple": "#8B5CF6",
-          light: "#A78BFA",
-          glow: "#C084FC",
+          primary: "var(--recur-primary)",
+          light: "var(--recur-light)",
+          glow: "var(--recur-glow)",
 
-          success: "#34D399",
-          warning: "#F59E0B",
-          error: "#F87171",
-          sgreen: "#14F195",
-          spurple: "#9945FF",
+          success: "var(--recur-success)",
+          warning: "var(--recur-warning)",
+          error: "var(--recur-error)",
 
           "text-heading": "var(--recur-text-heading)",
           "text-subheading": "var(--recur-text-subheading)",

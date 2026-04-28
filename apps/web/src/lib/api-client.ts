@@ -136,6 +136,20 @@ export async function apiClient<T>(
     }
   }
 
+  // 204 No Content / empty body on 2xx → synthesize success envelope
+  if (res.status === 204 || res.headers.get("content-length") === "0") {
+    return res.ok
+      ? { success: true, data: null, error: null }
+      : {
+          success: false,
+          data: null,
+          error: {
+            code: "HTTP_ERROR",
+            message: `Server returned ${res.status} with empty body`,
+          },
+        };
+  }
+
   let json: ApiResponse<T>;
   try {
     json = await res.json();
@@ -143,7 +157,10 @@ export async function apiClient<T>(
     json = {
       success: false,
       data: null,
-      error: { code: "PARSE_ERROR", message: `Server returned ${res.status} with non-JSON body` },
+      error: {
+        code: "PARSE_ERROR",
+        message: `Server returned ${res.status} with non-JSON body`,
+      },
     };
   }
   return json;

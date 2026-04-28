@@ -464,7 +464,7 @@ export default function SettingsPage() {
             ref={revokeBtnRef}
             onClick={handleConfirmRevoke}
             disabled={revoking}
-            className="btn-primary text-[13px] px-5 py-2 disabled:opacity-50 disabled:cursor-not-allowed bg-recur-error/10 border-recur-error/30 text-recur-error hover:bg-recur-error/20"
+            className="btn-primary text-[13px] px-5 py-2 disabled:opacity-50 disabled:cursor-not-allowed bg-recur-error border-recur-error text-white hover:brightness-110"
           >
             {revoking ? "Revoking…" : "Revoke Key"}
           </button>

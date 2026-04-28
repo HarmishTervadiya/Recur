@@ -66,7 +66,7 @@ router.get(
     const apps = await prisma.app.findMany({
       where: { merchantId: merchant.id },
       orderBy: { createdAt: "desc" },
-      include: { plans: { where: { isActive: true } } },
+      include: { _count: { select: { plans: true } } },
     });
     ok(res, apps);
   }),

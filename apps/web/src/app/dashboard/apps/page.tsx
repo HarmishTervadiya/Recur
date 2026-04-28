@@ -12,6 +12,11 @@ interface App {
   isActive: boolean;
   createdAt: string;
   _count?: { plans: number };
+  plans?: { id: string }[];
+}
+
+function getPlanCount(app: App): number {
+  return app._count?.plans ?? app.plans?.length ?? 0;
 }
 
 export default function AppsListPage() {
@@ -207,7 +212,7 @@ export default function AppsListPage() {
                 </p>
               )}
               <div className="flex items-center gap-4 text-[11px] text-recur-text-dim">
-                <span>{app._count?.plans ?? 0} plans</span>
+                <span>{getPlanCount(app)} {getPlanCount(app) === 1 ? "plan" : "plans"}</span>
                 <span>
                   Created {new Date(app.createdAt).toLocaleDateString()}
                 </span>

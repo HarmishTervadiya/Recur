@@ -79,6 +79,22 @@ module.exports = {
             boxShadow: "0 0 0 6px rgba(52, 211, 153, 0)",
           },
         },
+        pageEnter: {
+          "0%": { opacity: "0", transform: "translateY(6px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        fadeIn: {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" },
+        },
+        modalBackdrop: {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" },
+        },
+        modalEnter: {
+          "0%": { opacity: "0", transform: "translateY(8px) scale(0.98)" },
+          "100%": { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
       },
       animation: {
         "pulse-dot": "pulseDot 2s ease-in-out infinite",
@@ -88,6 +104,10 @@ module.exports = {
         "glow-pulse": "glowPulse 3s ease-in-out infinite",
         "tx-fade": "txFade 0.4s ease-out forwards",
         "dot-pulse": "dotPulse 2s ease-in-out infinite",
+        "page-enter": "pageEnter 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards",
+        "fade-in": "fadeIn 0.2s ease-out forwards",
+        "modal-backdrop": "modalBackdrop 0.18s ease-out forwards",
+        "modal-enter": "modalEnter 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards",
       },
       maxWidth: {
         container: "1120px",

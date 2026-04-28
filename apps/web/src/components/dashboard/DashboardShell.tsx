@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../providers/AuthProvider";
 import { DashboardSidebar } from "./DashboardSidebar";
 import { DashboardSkeleton } from "./DashboardSkeleton";
+import { PageTransition } from "./PageTransition";
 import { RecurLogoIcon } from "../icons/RecurLogoIcon";
 
 interface DashboardShellProps {
@@ -82,7 +83,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
       {/* Mobile overlay */}
       {mobileMenuOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden motion-safe:transition-opacity"
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden motion-safe:animate-fade-in"
           onClick={closeMobileMenu}
           aria-hidden="true"
         />
@@ -91,7 +92,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
       {/* Sidebar — always visible on lg, slide-in on mobile */}
       <div
         id={sidebarId}
-        className={`fixed left-0 top-0 h-screen z-50 motion-safe:transition-transform duration-200 lg:translate-x-0 ${
+        className={`fixed left-0 top-0 h-screen z-50 motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)] lg:translate-x-0 ${
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -100,7 +101,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
 
       <main className="flex-1 ml-0 lg:ml-[240px] min-h-screen pt-14 lg:pt-0">
         <div className="max-w-[1000px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          {children}
+          <PageTransition>{children}</PageTransition>
         </div>
       </main>
     </div>

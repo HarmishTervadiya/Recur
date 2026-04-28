@@ -311,7 +311,7 @@ export default function AppDetailPage() {
 
       {/* Plans Tab */}
       {activeTab === "plans" && (
-        <div>
+        <div key="tab-plans" className="motion-safe:animate-fade-in">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-[15px] font-bold text-recur-text-heading">{plans.length} Plans</h2>
             <button onClick={() => setShowCreatePlan(true)} className="btn-primary text-[12px] px-3 py-1.5">Create Plan</button>
@@ -346,7 +346,7 @@ export default function AppDetailPage() {
 
       {/* Transactions Tab */}
       {activeTab === "transactions" && (
-        <div>
+        <div key="tab-transactions" className="motion-safe:animate-fade-in">
           <h2 className="text-[15px] font-bold text-recur-text-heading mb-4">Transactions</h2>
           {transactions.length === 0 ? (
             <div className="dark-card text-center py-12">
@@ -433,7 +433,7 @@ export default function AppDetailPage() {
 
       {/* Webhooks Tab */}
       {activeTab === "webhooks" && (
-        <div>
+        <div key="tab-webhooks" className="motion-safe:animate-fade-in">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-[15px] font-bold text-recur-text-heading">Webhook Endpoint</h2>
             {webhooks.length === 0 && (
@@ -504,8 +504,8 @@ export default function AppDetailPage() {
 
       {/* Create Plan Modal */}
       {showCreatePlan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="dark-card-elevated w-full max-w-md mx-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm motion-safe:animate-modal-backdrop">
+          <div className="dark-card-elevated w-full max-w-md mx-4 motion-safe:animate-modal-enter">
             <h2 className="text-[18px] font-bold text-recur-text-heading mb-4">Create Plan</h2>
             <div className="space-y-4">
               <div>
@@ -549,8 +549,8 @@ export default function AppDetailPage() {
 
       {/* Edit App Modal */}
       {showEditApp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="dark-card-elevated w-full max-w-md mx-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm motion-safe:animate-modal-backdrop">
+          <div className="dark-card-elevated w-full max-w-md mx-4 motion-safe:animate-modal-enter">
             <h2 className="text-[18px] font-bold text-recur-text-heading mb-4">Edit App</h2>
             <div className="space-y-4">
               <div>
@@ -577,8 +577,8 @@ export default function AppDetailPage() {
 
       {/* Create Webhook Modal */}
       {showCreateWebhook && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="dark-card-elevated w-full max-w-md mx-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm motion-safe:animate-modal-backdrop">
+          <div className="dark-card-elevated w-full max-w-md mx-4 motion-safe:animate-modal-enter">
             <h2 className="text-[18px] font-bold text-recur-text-heading mb-4">Add Webhook Endpoint</h2>
             <div>
               <label className="block text-[11px] font-semibold text-recur-text-muted uppercase tracking-wider mb-1.5">Endpoint URL</label>

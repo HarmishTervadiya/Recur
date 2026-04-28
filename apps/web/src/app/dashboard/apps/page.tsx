@@ -110,8 +110,8 @@ export default function AppsListPage() {
 
       {/* Create modal */}
       {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="dark-card-elevated w-full max-w-md mx-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm motion-safe:animate-modal-backdrop">
+          <div className="dark-card-elevated w-full max-w-md mx-4 motion-safe:animate-modal-enter">
             <h2 className="text-[18px] font-bold text-recur-text-heading mb-4">
               Create App
             </h2>

@@ -13,7 +13,7 @@ export function ThemeToggle({ className = "" }: ThemeToggleProps) {
     <button
       onClick={toggleTheme}
       aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-      className={`flex items-center justify-center w-8 h-8 rounded-[8px] border border-recur-border text-recur-text-muted hover:text-recur-text-heading hover:border-recur-border-light hover:bg-recur-card transition-all duration-200 ${className}`}
+      className={`flex items-center justify-center w-8 h-8 rounded-[8px] border border-recur-border text-recur-text-muted hover:text-recur-text-heading hover:border-recur-border-light hover:bg-recur-card transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-recur-purple focus-visible:ring-offset-2 focus-visible:ring-offset-recur-surface ${className}`}
     >
       {theme === "dark" ? <SunIcon /> : <MoonIcon />}
     </button>

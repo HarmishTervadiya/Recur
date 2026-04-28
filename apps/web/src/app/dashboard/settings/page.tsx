@@ -141,9 +141,15 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="animate-pulse bg-recur-border rounded-[14px] h-8 w-32" />
-        <div className="animate-pulse bg-recur-border rounded-[14px] h-[300px]" />
+      <div
+        className="space-y-6"
+        role="status"
+        aria-busy="true"
+        aria-live="polite"
+      >
+        <span className="sr-only">Loading settings…</span>
+        <div className="motion-safe:animate-pulse bg-recur-border rounded-[14px] h-8 w-32" aria-hidden="true" />
+        <div className="motion-safe:animate-pulse bg-recur-border rounded-[14px] h-[300px]" aria-hidden="true" />
       </div>
     );
   }

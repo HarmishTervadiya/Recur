@@ -74,10 +74,16 @@ export default function AppsListPage() {
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        <div className="animate-pulse bg-recur-border rounded-[14px] h-8 w-32" />
+      <div
+        className="space-y-4"
+        role="status"
+        aria-busy="true"
+        aria-live="polite"
+      >
+        <span className="sr-only">Loading apps…</span>
+        <div className="motion-safe:animate-pulse bg-recur-border rounded-[14px] h-8 w-32" aria-hidden="true" />
         {[1, 2, 3].map((i) => (
-          <div key={i} className="animate-pulse bg-recur-border rounded-[14px] h-[100px]" />
+          <div key={i} className="motion-safe:animate-pulse bg-recur-border rounded-[14px] h-[100px]" aria-hidden="true" />
         ))}
       </div>
     );

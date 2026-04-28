@@ -281,11 +281,11 @@
 
 @layer components {
   .btn-primary {
-    @apply bg-recur-primary text-white text-[13px] font-bold px-6 py-3 rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:brightness-110 cursor-pointer;
+    @apply bg-recur-primary text-white text-[13px] font-bold px-6 py-3 rounded-[10px] transition-all duration-200 motion-safe:hover:scale-[1.02] hover:brightness-110 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-recur-primary focus-visible:ring-offset-2 focus-visible:ring-offset-recur-base;
   }
 
   .btn-secondary {
-    @apply bg-transparent text-recur-light border border-recur-border-light text-[13px] font-semibold px-6 py-3 rounded-[10px] transition-all duration-200 hover:border-recur-primary cursor-pointer;
+    @apply bg-transparent text-recur-light border border-recur-border-light text-[13px] font-semibold px-6 py-3 rounded-[10px] transition-all duration-200 hover:border-recur-primary cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-recur-primary focus-visible:ring-offset-2 focus-visible:ring-offset-recur-base;
   }
 
   .dark-card {

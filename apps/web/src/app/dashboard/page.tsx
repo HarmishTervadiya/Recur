@@ -98,20 +98,33 @@ export default function DashboardOverview() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let active = true;
     apiClient<MerchantProfile>("/merchant/me")
       .then((res) => {
+        if (!active) return;
         if (res.success && res.data) setMerchant(res.data);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="animate-pulse bg-recur-border/50 rounded-[14px] h-8 w-48" />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div
+        className="space-y-6"
+        role="status"
+        aria-busy="true"
+        aria-live="polite"
+      >
+        <span className="sr-only">Loading dashboard…</span>
+        <div className="motion-safe:animate-pulse bg-recur-border/50 rounded-[14px] h-8 w-48" aria-hidden="true" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4" aria-hidden="true">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse bg-recur-border/30 rounded-[14px] h-[140px]" />
+            <div key={i} className="motion-safe:animate-pulse bg-recur-border/30 rounded-[14px] h-[140px]" />
           ))}
         </div>
       </div>

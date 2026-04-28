@@ -17,6 +17,16 @@
   --recur-text-body: #8b8ba7;
   --recur-text-muted: #6b6b8a;
   --recur-text-dim: #4b4b6b;
+
+  /* Brand */
+  --recur-primary: #7c3aed;
+  --recur-light: #a78bfa;
+  --recur-glow: #c084fc;
+
+  /* Status (tuned for dark surfaces) */
+  --recur-success: #34d399;
+  --recur-warning: #f59e0b;
+  --recur-error: #f87171;
 }
 
 .light {
@@ -31,6 +41,16 @@
   --recur-text-body: #4b4780;
   --recur-text-muted: #6b6b8a;
   --recur-text-dim: #9896b5;
+
+  /* Brand (slightly darker for AA on light surfaces) */
+  --recur-primary: #6d28d9;
+  --recur-light: #7c3aed;
+  --recur-glow: #8b5cf6;
+
+  /* Status (darker shades hit AA on light bg) */
+  --recur-success: #047857;
+  --recur-warning: #b45309;
+  --recur-error: #b91c1c;
 }
 
 @layer base {

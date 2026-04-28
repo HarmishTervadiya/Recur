@@ -245,9 +245,15 @@ export default function AppDetailPage() {
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        <div className="animate-pulse bg-recur-border rounded-[14px] h-8 w-48" />
-        <div className="animate-pulse bg-recur-border rounded-[14px] h-[200px]" />
+      <div
+        className="space-y-4"
+        role="status"
+        aria-busy="true"
+        aria-live="polite"
+      >
+        <span className="sr-only">Loading app details…</span>
+        <div className="motion-safe:animate-pulse bg-recur-border rounded-[14px] h-8 w-48" aria-hidden="true" />
+        <div className="motion-safe:animate-pulse bg-recur-border rounded-[14px] h-[200px]" aria-hidden="true" />
       </div>
     );
   }

@@ -7,6 +7,7 @@ import {
 import {
   getAssociatedTokenAddressSync,
   createApproveInstruction,
+  createAssociatedTokenAccountIdempotentInstruction,
 } from "@solana/spl-token";
 import {
   PROGRAM_ID as DEFAULT_PROGRAM_ID,
@@ -16,6 +17,7 @@ import {
   planSeedToArray,
 } from "@recur/solana-client";
 import crypto from "crypto";
+import { InsufficientFundsError } from "./errors.js";
 
 import type {
   RecurConfig,
@@ -133,8 +135,9 @@ export class RecurClient {
    * Build instructions to create a new subscription on-chain.
    *
    * Instructions:
-   *   1. SPL Token `approve` — delegate subscription PDA to pull funds
-   *   2. `initialize_subscription` — create the PDA on-chain
+   *   1. `createAssociatedTokenAccountIdempotent` — ensure subscriber ATA exists
+   *   2. SPL Token `approve` — delegate subscription PDA to pull funds
+   *   3. `initialize_subscription` — create the PDA on-chain
    */
   buildSubscribeTransaction(
     subscriberWallet: PublicKey,
@@ -183,7 +186,14 @@ export class RecurClient {
       data: ixData,
     });
 
-    return { subscriptionPda, instructions: [approveIx, initIx], bump };
+    const createAtaIx = createAssociatedTokenAccountIdempotentInstruction(
+      subscriberWallet,
+      subscriberAta,
+      subscriberWallet,
+      this.usdcMint,
+    );
+
+    return { subscriptionPda, instructions: [createAtaIx, approveIx, initIx], bump };
   }
 
   /**
@@ -466,6 +476,20 @@ export class RecurClient {
     options: SubscribeOptions & { appId: string; planId: string },
     authToken: string,
   ): Promise<{ subscriptionPda: PublicKey; signature: string; subscription: SubscriptionInfo }> {
+    // Ensure subscriber has enough USDC for at least the first cycle.
+    const subscriberAta = getAssociatedTokenAddressSync(this.usdcMint, wallet.publicKey);
+    const ataInfo = await this.connection
+      .getTokenAccountBalance(subscriberAta)
+      .catch(() => null);
+    const balance = BigInt(ataInfo?.value?.amount ?? "0");
+    const required = BigInt(options.amount);
+    if (balance < required) {
+      throw new InsufficientFundsError(
+        `Insufficient USDC balance. Required: ${required.toString()} base units, available: ${balance.toString()}`,
+        required,
+      );
+    }
+
     const { subscriptionPda, instructions } = this.buildSubscribeTransaction(
       wallet.publicKey,
       options,

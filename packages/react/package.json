@@ -21,6 +21,7 @@
   "dependencies": {
     "@recur/sdk": "*",
     "@recur/solana-client": "*",
+    "@solana/wallet-adapter-react-ui": "^0.9.35",
     "bs58": "^6.0.0"
   },
   "peerDependencies": {

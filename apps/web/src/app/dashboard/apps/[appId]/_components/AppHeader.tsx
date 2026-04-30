@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { CopyableId } from "../../../../../components/ui/CopyableId";
 import type { AppDetail } from "./utils";
 
 interface AppHeaderProps {
@@ -43,6 +44,9 @@ export function AppHeader({ app, onEdit, onToggleActive }: AppHeaderProps) {
             {app.description}
           </p>
         )}
+        <div className="mt-2">
+          <CopyableId label="App ID" value={app.id} />
+        </div>
       </div>
       <div className="flex gap-2 shrink-0">
         <button

@@ -25,6 +25,7 @@ import {
   WalletProvider as SolanaWalletProvider,
   useWallet,
 } from "@solana/wallet-adapter-react";
+import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import type { Adapter } from "@solana/wallet-adapter-base";
 import { RecurClient, getClusterDefaults, type Cluster } from "@recur/sdk";
 import { AuthManager, type AuthSession } from "./AuthManager.js";
@@ -89,7 +90,9 @@ export function RecurProvider({
   return (
     <ConnectionProvider endpoint={effectiveRpc}>
       <SolanaWalletProvider wallets={wallets ?? []} autoConnect>
-        {inner}
+        <WalletModalProvider>
+          {inner}
+        </WalletModalProvider>
       </SolanaWalletProvider>
     </ConnectionProvider>
   );

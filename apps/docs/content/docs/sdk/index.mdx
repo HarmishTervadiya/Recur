@@ -1,38 +1,57 @@
 ---
-title: SDK
-description: TypeScript SDK for integrating Recur Protocol.
+title: Advanced / Custom Web3
+description: Low-level @recur/sdk builders for full control over transactions and signing.
 ---
 
-# SDK
+# Advanced / Custom Web3
 
-The `@recur/sdk` package provides everything you need to integrate Recur Protocol
-into your application — transaction builders for the on-chain program, REST API
-wrappers, and webhook signature verification.
+> Most apps should use **[Integration](/docs/integration)** instead. This section is for builders who want to construct, inspect, or modify on-chain transactions directly — for example to bundle Recur with other instructions in the same transaction, ship a custom wallet flow, or run server-side keepers.
 
-## For subscribers
+The `@recur/sdk` package exposes raw builders for every on-chain operation, plus REST wrappers and webhook primitives.
 
-Build transactions that create on-chain subscriptions and manage token delegation:
+## When to use this layer
 
-- [Quickstart](/docs/sdk/quickstart) — install, configure, and create your first subscription
+- You compose Recur with other Solana instructions in a single transaction
+- You sign with a non-standard wallet (HSM, MPC, custodian)
+- You build merchant tooling that bypasses the React/JWT flow
+- You're writing tests or scripts against the protocol
+
+For everything else — drop-in components, hooks, server-side helpers, and webhook verification — start at **[/docs/integration](/docs/integration)**.
+
+## Subscriber operations
+
+- [Quickstart](/docs/sdk/quickstart) — install and configure `RecurClient`
 - [Subscribe](/docs/sdk/subscribe) — `buildSubscribeTransaction`, `buildReapproveTransaction`
 - [Cancel](/docs/sdk/cancel) — `buildCancelTransaction`, `buildFinalizeCancelTransaction`, `buildSubscriberCancelTransaction`
 - [Subscriptions](/docs/sdk/subscriptions) — `getMySubscriptions`, `getSubscription`, `registerSubscription`, `getSubscriptionAccount`, `deriveSubscriptionPda`
 
-## For merchants
+## Merchant operations
 
-REST API wrappers authenticated with API keys (passed once via the constructor):
+API-key-authenticated REST wrappers:
 
 - [Plans](/docs/sdk/plans) — `createPlan`, `listPlans`, `getPlan`, `getPlans`
 - [Subscriptions](/docs/sdk/subscriptions) — `listSubscriptions`, `getPaymentHistory`
 
-## Webhooks
+## Webhooks (low-level)
 
 - [Webhooks](/docs/sdk/webhooks) — `verifyWebhookSignature`, `parseWebhookPayload`
 
+For framework-aware middleware (Express, Next.js, Node) prefer **[`@recur/server`](/docs/integration/server)**, which delegates to the same primitives.
+
+## High-level helpers (also on `RecurClient`)
+
+The same orchestration the React hooks use is available directly on the client. See **[Server-side helpers](/docs/integration/server-side)** for details.
+
+| Method | Equivalent low-level calls |
+|---|---|
+| `client.authenticate(wallet)` | `POST /auth/nonce` → `wallet.signMessage` → `POST /auth/verify` |
+| `client.subscribe(wallet, options, token)` | `buildSubscribeTransaction` → sign+send → `registerSubscription` |
+| `client.cancel(wallet, options)` | `buildCancelTransaction` or `buildSubscriberCancelTransaction` → sign+send |
+| `client.reapprove(wallet, options)` | `buildReapproveTransaction` → sign+send |
+
 ## Re-exports
 
-The SDK also re-exports useful helpers and types so you don't need to depend on
-`@recur/solana-client` or `@recur/types` directly:
+The SDK re-exports useful helpers and types so you don't need to depend on `@recur/solana-client` or `@recur/types` directly:
 
 | Re-export | Source | Description |
 |---|---|---|
@@ -43,5 +62,9 @@ The SDK also re-exports useful helpers and types so you don't need to depend on
 | `planSeedToBuffer` | `@recur/solana-client` | Hex → 8-byte Buffer |
 | `planSeedToArray` | `@recur/solana-client` | Hex → `number[]` for Anchor |
 | `EventType` | `@recur/types` | Webhook event union |
-| `SubscriptionStatus` | `@recur/types` | `active \| past_due \| cancelled` |
+| `SubscriptionStatus` | `@recur/types` | `active \| past_due \| cancelled \| expired` |
 | `WebhookPayload` | `@recur/types` | Webhook payload shape |
+| `RecurError` (and subclasses) | — | Typed error hierarchy |
+| `getClusterDefaults` | — | `cluster → { rpcUrl, programId, usdcMint }` |
+| `signAndSend` | — | Wallet → tx → send → confirm pipeline |
+| `unwrap` | — | Throw on `{ success: false }` envelopes |

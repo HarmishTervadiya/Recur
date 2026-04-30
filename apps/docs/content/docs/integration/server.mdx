@@ -1,0 +1,119 @@
+---
+title: Webhook verification
+description: Verify Recur webhooks with one line per framework using @recur/server.
+---
+
+# Webhook verification
+
+Recur posts signed JSON to your configured webhook URL on every relevant event. The `@recur/server` package gives you a one-line middleware per framework that verifies the HMAC and parses the payload. Verification logic lives in a single core function — every adapter is a thin wrapper.
+
+```bash
+bun add @recur/server
+```
+
+`@recur/server` is **server-only**. Importing it from a browser or React Server Component throws a clear error.
+
+## Signing details
+
+| Header | Description |
+|---|---|
+| `X-Recur-Signature` | `sha256=` + hex HMAC over `"${timestamp}.${rawBody}"` |
+| `X-Recur-Timestamp` | Unix seconds at dispatch time (rejected if more than 5 minutes skew) |
+
+The HMAC key is the per-app webhook secret you configure in the Recur dashboard.
+
+## Express
+
+```ts
+import express from "express";
+import { verifyWebhookExpress } from "@recur/server";
+
+const app = express();
+const secret = process.env.RECUR_WEBHOOK_SECRET!;
+
+// IMPORTANT: use raw body parsing for the webhook route only
+app.post(
+  "/webhooks/recur",
+  express.raw({ type: "application/json" }),
+  verifyWebhookExpress(secret),
+  (req, res) => {
+    const event = req.recurEvent!; // typed WebhookPayload
+    switch (event.type) {
+      case "payment_success": /* ... */ break;
+      case "payment_failed":  /* ... */ break;
+      case "cancel_finalized": /* ... */ break;
+    }
+    res.status(200).end();
+  },
+);
+```
+
+On signature failure the middleware responds `401` automatically and your handler is never called.
+
+## Next.js (App Router)
+
+```ts title="app/api/webhooks/recur/route.ts"
+import { verifyWebhookNext } from "@recur/server";
+
+export async function POST(req: Request) {
+  try {
+    const event = await verifyWebhookNext(req, process.env.RECUR_WEBHOOK_SECRET!);
+    // ... handle event
+    return Response.json({ ok: true });
+  } catch {
+    return new Response("invalid signature", { status: 401 });
+  }
+}
+```
+
+## Raw Node (`http.IncomingMessage`)
+
+```ts
+import { verifyWebhookNode } from "@recur/server";
+
+server.on("request", async (req, res) => {
+  if (req.url === "/webhooks/recur" && req.method === "POST") {
+    try {
+      const event = await verifyWebhookNode(req, secret);
+      // ... handle event
+      res.writeHead(200).end();
+    } catch {
+      res.writeHead(401).end();
+    }
+  }
+});
+```
+
+## Framework-agnostic core
+
+If none of the adapters fit (Hono, Bun.serve, Workers, etc.), call `verifyWebhook` directly:
+
+```ts
+import { verifyWebhook } from "@recur/server";
+
+const event = verifyWebhook({
+  body: rawBodyString,
+  signature: req.headers.get("x-recur-signature"),
+  timestamp: req.headers.get("x-recur-timestamp"),
+  secret,
+});
+```
+
+## Events
+
+All events are POSTed with `Content-Type: application/json`. Names are `snake_case`.
+
+| Event | Trigger |
+|---|---|
+| `subscription_created` | Initial registration after on-chain initialize |
+| `payment_success` | Keeper pulled and confirmed a payment |
+| `payment_failed` | Keeper attempted but failed (insufficient funds, delegation exhausted, etc.) |
+| `cancel_requested` | Subscriber or merchant called `request_cancel` |
+| `cancel_finalized` | Paid period elapsed and the PDA was closed |
+| `cancel_forced` | Merchant called `force_cancel` |
+
+Recur retries failed deliveries at 1m, 5m, 30m, 2h, 12h. Your endpoint should respond `2xx` within 5 seconds and dedupe on `event.data.id`.
+
+## Low-level primitives
+
+If you only need the HMAC check without payload parsing, `@recur/sdk` re-exports `verifyWebhookSignature` and `parseWebhookPayload` directly. See [the SDK reference](/docs/sdk/webhooks) — these are the building blocks `@recur/server` delegates to.

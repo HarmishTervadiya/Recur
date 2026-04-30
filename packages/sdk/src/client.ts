@@ -19,6 +19,7 @@ import crypto from "crypto";
 
 import type {
   RecurConfig,
+  RecurWallet,
   OnChainSubscription,
   SubscribeOptions,
   SubscribeTransaction,
@@ -32,7 +33,9 @@ import type {
   RegisterSubscriptionOptions,
   ListOptions,
 } from "./types.js";
-import { request, type HttpOptions } from "./internal/http.js";
+import { request, unwrap, type HttpOptions } from "./internal/http.js";
+import { signAndSend } from "./internal/sign-and-send.js";
+import bs58 from "bs58";
 
 const SUBSCRIPTION_ACCOUNT_SIZE = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 8 + 1;
 
@@ -423,5 +426,108 @@ export class RecurClient {
     }
     const match = res.data.find((s) => s.subscriptionPda === subscriptionPda) ?? null;
     return { success: true, data: match, error: null };
+  }
+
+  // ---------- L3 high-level helpers ----------
+
+  /**
+   * Authenticate a wallet against the Recur API.
+   * Performs nonce → signMessage → verify and returns a JWT.
+   */
+  async authenticate(wallet: RecurWallet): Promise<string> {
+    const nonceRes = await request<{ nonce: string; message: string }>(
+      this.http,
+      "/auth/nonce",
+      {
+        method: "POST",
+        body: { walletAddress: wallet.publicKey.toBase58() },
+      },
+    );
+    const { message } = unwrap(nonceRes);
+    const sigBytes = await wallet.signMessage(new TextEncoder().encode(message));
+
+    const verifyRes = await request<{ token: string }>(this.http, "/auth/verify", {
+      method: "POST",
+      body: {
+        walletAddress: wallet.publicKey.toBase58(),
+        message,
+        signature: bs58.encode(sigBytes),
+      },
+    });
+    return unwrap(verifyRes).token;
+  }
+
+  /**
+   * Subscribe a wallet to a plan: build → sign → confirm → register.
+   * Caller supplies a JWT (from `authenticate()`).
+   */
+  async subscribe(
+    wallet: RecurWallet,
+    options: SubscribeOptions & { appId: string; planId: string },
+    authToken: string,
+  ): Promise<{ subscriptionPda: PublicKey; signature: string; subscription: SubscriptionInfo }> {
+    const { subscriptionPda, instructions } = this.buildSubscribeTransaction(
+      wallet.publicKey,
+      options,
+    );
+    const signature = await signAndSend(this.connection, wallet, instructions);
+    const registered = await this.registerSubscription(
+      {
+        appId: options.appId,
+        planId: options.planId,
+        subscriptionPda: subscriptionPda.toBase58(),
+      },
+      authToken,
+    );
+    return { subscriptionPda, signature, subscription: unwrap(registered) };
+  }
+
+  /**
+   * Cancel a subscription. Defaults to `request_cancel` (preserves prepaid time);
+   * pass `mode: "instant"` for `subscriber_cancel` (forfeits prepaid time).
+   */
+  async cancel(
+    wallet: RecurWallet,
+    options: { merchantWallet: string; planSeed: string; mode?: "request" | "instant" },
+  ): Promise<{ signature: string }> {
+    let instructions;
+    if (options.mode === "instant") {
+      ({ instructions } = this.buildSubscriberCancelTransaction(wallet.publicKey, {
+        merchantWallet: options.merchantWallet,
+        planSeed: options.planSeed,
+      }));
+    } else {
+      const { pda } = this.deriveSubscriptionPda(
+        wallet.publicKey,
+        new PublicKey(options.merchantWallet),
+        options.planSeed,
+      );
+      ({ instructions } = this.buildCancelTransaction(wallet.publicKey, {
+        subscriptionPda: pda.toBase58(),
+        subscriberWallet: wallet.publicKey.toBase58(),
+        merchantWallet: options.merchantWallet,
+        planSeed: options.planSeed,
+      }));
+    }
+    const signature = await signAndSend(this.connection, wallet, instructions);
+    return { signature };
+  }
+
+  /**
+   * Re-approve USDC delegation for an existing subscription PDA.
+   * Used when the original delegation is exhausted/revoked.
+   */
+  async reapprove(
+    wallet: RecurWallet,
+    options: {
+      merchantWallet: string;
+      planSeed: string;
+      amount: number;
+      delegationCycles?: number;
+    },
+  ): Promise<{ signature: string }> {
+    const { instructions } = this.buildReapproveTransaction(wallet.publicKey, options);
+    const signature = await signAndSend(this.connection, wallet, instructions);
+    return { signature };
   }
 }

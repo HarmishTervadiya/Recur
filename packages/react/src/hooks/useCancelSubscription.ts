@@ -1,5 +1,5 @@
 /**
- * Cancel a subscription.
+ * Cancel a subscription via the L3 `client.cancel()` helper.
  *
  * Modes:
  *   - "request" (default): on-chain `request_cancel`; subscription remains
@@ -8,7 +8,7 @@
  *     forfeits any prepaid time.
  */
 
-import { signAndSend, type RecurError, type SubscriptionInfo } from "@recur/sdk";
+import type { RecurError, SubscriptionInfo } from "@recur/sdk";
 import { useRecur } from "./useRecur.js";
 import { useAsyncAction } from "../internal/useAsyncAction.js";
 import { useConnectedWallet } from "../internal/useConnectedWallet.js";
@@ -29,26 +29,13 @@ export function useCancelSubscription(): UseCancelSubscriptionResult {
   const action = useAsyncAction(
     async (subscription: SubscriptionInfo, mode: CancelMode = "request"): Promise<string> => {
       const wallet = getWallet();
-      const plan = subscription.plan;
-      if (!plan?.app?.merchant?.walletAddress) {
+      const merchantWallet = subscription.plan?.app?.merchant?.walletAddress;
+      const planSeed = subscription.plan?.planSeed;
+      if (!merchantWallet || !planSeed) {
         throw new Error("Subscription missing plan/merchant context");
       }
-      const merchantWallet = plan.app.merchant.walletAddress;
-
-      const { instructions } =
-        mode === "instant"
-          ? client.buildSubscriberCancelTransaction(wallet.publicKey, {
-              merchantWallet,
-              planSeed: plan.planSeed,
-            })
-          : client.buildCancelTransaction(wallet.publicKey, {
-              subscriptionPda: subscription.subscriptionPda,
-              subscriberWallet: wallet.publicKey.toBase58(),
-              merchantWallet,
-              planSeed: plan.planSeed,
-            });
-
-      return signAndSend(client.connection, wallet, instructions);
+      const { signature } = await client.cancel(wallet, { merchantWallet, planSeed, mode });
+      return signature;
     },
   );
 

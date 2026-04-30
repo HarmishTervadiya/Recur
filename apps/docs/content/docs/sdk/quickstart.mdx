@@ -13,55 +13,56 @@ npm install @recur/sdk @solana/web3.js @solana/spl-token
 
 ## Initialize the client
 
+`apiBaseUrl` is required. `programId` and `usdcMint` default to the deployed
+devnet values.
+
 ```typescript title="recur.ts"
 import { RecurClient } from "@recur/sdk";
 
 const recur = new RecurClient({
   rpcUrl: "https://api.devnet.solana.com",
-  // Optional: override defaults
+  apiBaseUrl: "https://api.recur.so",
+  // Optional overrides:
   // programId: "3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx",
   // usdcMint: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
-  // apiBaseUrl: "https://api.recur.so",
+  // apiKey: process.env.RECUR_API_KEY, // for merchant-authenticated calls
 });
 ```
 
 ## Subscribe a user
 
-Build a transaction that creates an on-chain subscription. The subscriber signs
-it in their wallet — no backend needed.
+Build the instructions that create an on-chain subscription. The subscriber signs
+the resulting transaction in their wallet — no backend signature needed.
 
 ```typescript title="subscribe.ts"
 import { RecurClient } from "@recur/sdk";
-import { Connection, PublicKey } from "@solana/web3.js";
+import { Connection, PublicKey, Transaction } from "@solana/web3.js";
 
 const recur = new RecurClient({
   rpcUrl: "https://api.devnet.solana.com",
+  apiBaseUrl: "https://api.recur.so",
 });
 
-// Merchant wallet and plan details (from your backend/API)
-const merchantWallet = new PublicKey("MERCHANT_WALLET_ADDRESS");
+// Plan + merchant details (from your backend / the Recur API)
+const planId = "cmoe0k7nj001fcemltjf3uhca";
+const merchantWallet = "MERCHANT_WALLET_ADDRESS";
 const planSeed = "0100000000000000"; // hex-encoded 8-byte plan seed
-const amount = 5_000_000;  // $5.00 USDC
-const interval = 2_592_000; // 30 days in seconds
+const amount = 5_000_000;             // $5.00 USDC
+const intervalSeconds = 2_592_000;    // 30 days
 
-// Build the transaction (returns instructions, not yet signed)
-const { transaction, subscriptionPda, bump } =
-  await recur.buildSubscribeTransaction({
-    subscriber: subscriberWallet.publicKey,
-    merchant: merchantWallet,
-    planSeed,
-    amount,
-    interval,
-  });
+const { subscriptionPda, instructions } = recur.buildSubscribeTransaction(
+  subscriberWallet.publicKey,
+  { planId, merchantWallet, planSeed, amount, intervalSeconds },
+);
 
-// Send to the subscriber's wallet for signing
-// (in a frontend app, use wallet adapter's sendTransaction)
-const signature = await sendTransaction(transaction, connection);
+const tx = new Transaction().add(...instructions);
+const signature = await sendTransaction(tx, connection);
+await connection.confirmTransaction(signature, "confirmed");
 ```
 
-The returned `transaction` contains two instructions:
+The returned `instructions` array contains exactly two instructions:
 
-1. **SPL Token `approve`** — delegates tokens to the Subscription PDA
+1. **SPL Token `approve`** — delegates `amount × delegationCycles` (default 12) to the Subscription PDA
 2. **`initialize_subscription`** — creates the on-chain PDA with amount, interval, and plan seed
 
 ## What happens next
@@ -69,10 +70,15 @@ The returned `transaction` contains two instructions:
 Once the subscription is created on-chain:
 
 1. The **first payment is processed immediately** — no waiting for the billing interval
-2. The **Keeper** detects the subscription and registers it in the database
+2. The **Keeper** detects the subscription and registers it in the database (your
+   frontend can also call `registerSubscription` directly with the subscriber JWT)
 3. After each subsequent billing interval elapses, the Keeper calls `process_payment`
-3. Funds are pulled from the subscriber's wallet: net amount to the merchant, platform fee to the treasury
-4. A **webhook** fires to the merchant's registered endpoint with payment details
+4. Funds are pulled from the subscriber's wallet: net amount to the merchant, platform fee to the treasury
+5. A **webhook** fires to the merchant's registered endpoint with payment details
+
+When the SPL approve runs out (after `delegationCycles` payments), call
+[`buildReapproveTransaction`](/docs/sdk/subscribe#re-approving-an-exhausted-delegation)
+to top it up — no on-chain subscription state is touched.
 
 ## Next steps
 

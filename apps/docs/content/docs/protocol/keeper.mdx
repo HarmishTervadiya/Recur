@@ -13,7 +13,7 @@ alongside the API server.
 
 | Job | Interval | Description |
 |---|---|---|
-| `processPayments` | Every 15s | Queries DB for subscriptions past `nextPaymentDue`, calls `process_payment` on-chain |
+| `processPayments` | Every 15s | Queries DB for subscriptions past `nextPaymentDue`, calls `process_payment` on-chain. Uses a hardcoded fee schedule (50,000 base units flat + 25 bps) — see [Fee Structure](/docs/protocol/fees) |
 | `finalizeCancel` | Every 15s | Closes subscriptions whose cancellation grace period has elapsed |
 | `forceCancel` | Every 5min | Checks token delegation validity; force-cancels if subscriber revoked delegation |
 | `chainScan` | Every 5min | Safety net — scans all program accounts via `getProgramAccounts` and registers missing subscriptions |

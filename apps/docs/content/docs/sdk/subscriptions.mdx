@@ -5,36 +5,88 @@ description: Query and manage subscriptions via the SDK.
 
 # Subscriptions
 
-Query subscription data for your app — active subscribers, payment history, and status.
+Query subscription data for your app — active subscribers, payment history, and
+on-chain state. Methods that hit the merchant API use the `apiKey` you passed to
+`new RecurClient(...)`. Subscriber methods take a JWT per call.
 
-## List subscriptions
+All API methods return an `ApiResponse<T>`:
 
 ```typescript
-const subscriptions = await recur.listSubscriptions(appId, apiKey, {
-  page: 1,
-  limit: 50,
-  status: "active", // "active" | "cancelled" | "expired"
-});
+interface ApiResponse<T> {
+  success: boolean;
+  data: T | null;
+  error: { code: string; message: string; details?: unknown } | null;
+  pagination?: { page: number; limit: number; total: number; totalPages: number };
+}
 ```
 
-## Get payment history
+Always check `res.success` before reading `res.data`.
+
+## Merchant: list subscriptions
 
 ```typescript
-const transactions = await recur.getPaymentHistory(appId, apiKey, {
-  page: 1,
-  limit: 100,
-});
+const res = await recur.listSubscriptions(appId, { page: 1, limit: 50 });
 
-for (const tx of transactions) {
-  console.log(
-    `${tx.txSignature}: $${Number(tx.amountNet) / 1e6} net (${tx.status})`,
-  );
+if (res.success && res.data) {
+  for (const sub of res.data) {
+    console.log(sub.subscriptionPda, sub.status);
+  }
 }
+```
+
+`listSubscriptions(appId, options?)` only paginates — filter client-side on
+`status` if needed.
+
+## Merchant: get payment history
+
+```typescript
+const res = await recur.getPaymentHistory(appId, { page: 1, limit: 100 });
+
+if (res.success && res.data) {
+  for (const tx of res.data) {
+    console.log(
+      `${tx.txSignature}: $${Number(tx.amountNet) / 1e6} net (${tx.status})`,
+    );
+  }
+}
+```
+
+## Subscriber: my subscriptions
+
+Authenticated as a subscriber, list all subscriptions for the wallet that owns
+the JWT.
+
+```typescript
+const res = await recur.getMySubscriptions(authToken, { page: 1, limit: 20 });
+```
+
+## Subscriber: a single subscription by PDA
+
+Looks up a subscription by its on-chain PDA across the subscriber's records.
+
+```typescript
+const res = await recur.getSubscription(subscriptionPda, authToken);
+if (res.success && res.data) {
+  console.log(res.data.status, res.data.nextPaymentDue);
+}
+```
+
+## Register an on-chain subscription
+
+After `buildSubscribeTransaction` confirms on-chain, register it with the Recur
+API using the subscriber JWT. The Keeper's chain scanner is a fallback if this
+call is missed.
+
+```typescript
+const res = await recur.registerSubscription(
+  { appId, planId, subscriptionPda: subscriptionPda.toBase58() },
+  authToken,
+);
 ```
 
 ## Read on-chain state
 
-Fetch the raw on-chain subscription account data directly from Solana:
+Fetch the raw on-chain Subscription account directly from Solana — no API call:
 
 ```typescript
 const account = await recur.getSubscriptionAccount(subscriptionPda);
@@ -55,7 +107,7 @@ if (account) {
 |---|---|---|
 | `subscriber` | `PublicKey` | Subscriber wallet |
 | `merchant` | `PublicKey` | Merchant wallet |
-| `planSeed` | `Buffer` | 8-byte plan seed |
+| `planSeed` | `number[]` | 8-byte plan seed |
 | `amount` | `bigint` | USDC base units per interval |
 | `interval` | `bigint` | Seconds between payments |
 | `lastPaymentTimestamp` | `bigint` | Unix timestamp of last successful pull |
@@ -65,13 +117,14 @@ if (account) {
 
 ## Derive a PDA
 
-If you know the subscriber, merchant, and plan seed, derive the PDA without an API call:
+If you know the subscriber, merchant, and plan seed, derive the PDA without an
+RPC or API call:
 
 ```typescript
-const pda = recur.deriveSubscriptionPda(subscriber, merchant, planSeed);
+const { pda, bump } = recur.deriveSubscriptionPda(subscriber, merchant, planSeed);
 ```
 
-This is equivalent to:
+This is equivalent to using the lower-level helper:
 
 ```typescript
 import { findSubscriptionPda, planSeedToBuffer } from "@recur/sdk";

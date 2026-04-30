@@ -181,6 +181,8 @@ export class RecurClient {
         { pubkey: subscriptionPda, isSigner: false, isWritable: true },
         { pubkey: subscriberWallet, isSigner: true, isWritable: true },
         { pubkey: merchantPubkey, isSigner: false, isWritable: false },
+        { pubkey: subscriberAta, isSigner: false, isWritable: false },
+        { pubkey: this.usdcMint, isSigner: false, isWritable: false },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ],
       data: ixData,

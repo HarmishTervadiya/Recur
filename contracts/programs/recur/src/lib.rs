@@ -54,6 +54,12 @@ pub mod recur {
         );
         require!(interval > 0, RecurError::InvalidInterval);
 
+        // Ensure subscriber can cover at least the first payment cycle.
+        require!(
+            ctx.accounts.subscriber_token_account.amount >= amount,
+            RecurError::InsufficientSubscriberBalance
+        );
+
         let now = Clock::get()?.unix_timestamp as u64;
         let sub = &mut ctx.accounts.subscription;
 
@@ -398,6 +404,16 @@ pub struct InitializeSubscription<'info> {
     /// CHECK: Merchant wallet. Verified off-chain via the Plan's merchant field.
     /// Not required to sign so the SDK can create subscriptions client-side.
     pub merchant: AccountInfo<'info>,
+
+    /// Subscriber's token account for the payment mint — must hold >= `amount`.
+    #[account(
+        token::mint = payment_mint,
+        token::authority = subscriber,
+    )]
+    pub subscriber_token_account: Account<'info, TokenAccount>,
+
+    /// The payment token mint (e.g. USDC).
+    pub payment_mint: Account<'info, Mint>,
 
     pub system_program: Program<'info, System>,
 }
@@ -830,4 +846,7 @@ pub enum RecurError {
 
     #[msg("Destination token account does not match the proposal.")]
     InvalidDestination,
+
+    #[msg("Subscriber has insufficient token balance for the first payment.")]
+    InsufficientSubscriberBalance,
 }

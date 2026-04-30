@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import { apiClient, parseFieldErrors } from "../../../../../lib/api-client";
 import { useToast } from "../../../../../components/ui/ToastProvider";
 import { Modal } from "../../../../../components/ui/Modal";
+import { CopyableId } from "../../../../../components/ui/CopyableId";
 import {
   formatAmount,
   formatInterval,
@@ -150,8 +151,11 @@ export function PlansTab({ appId, plans, onRefresh }: PlansTabProps) {
                   {plan.description}
                 </p>
               )}
-              <div className="text-[10px] font-mono text-recur-text-dim truncate">
-                Seed: {plan.planSeed}
+              <div className="flex flex-col gap-1">
+                <CopyableId label="Plan ID" value={plan.id} />
+                <div className="text-[10px] font-mono text-recur-text-dim truncate">
+                  Seed: {plan.planSeed}
+                </div>
               </div>
             </div>
           ))}

@@ -159,6 +159,7 @@
       "dependencies": {
         "@recur/sdk": "*",
         "@recur/solana-client": "*",
+        "@solana/wallet-adapter-react-ui": "^0.9.35",
         "bs58": "^6.0.0",
       },
       "devDependencies": {
@@ -189,6 +190,7 @@
         "@recur/types": "*",
         "@solana/spl-token": "^0.4.6",
         "@solana/web3.js": "^1.91.0",
+        "bs58": "^6.0.0",
       },
       "devDependencies": {
         "@types/node": "^20.12.0",

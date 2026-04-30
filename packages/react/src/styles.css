@@ -11,6 +11,9 @@
    components work out of the box. Importing this file gives you the
    branded look used in Recur's own dashboard. */
 
+/* Standard Solana wallet-adapter modal/button styles */
+@import "@solana/wallet-adapter-react-ui/styles.css";
+
 .recur-subscribe-button,
 .recur-signin-button,
 .recur-connect-button {

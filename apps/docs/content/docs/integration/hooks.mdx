@@ -1,0 +1,86 @@
+---
+title: Hooks
+description: Headless React hooks for fully custom subscribe, cancel, and re-approve UIs.
+---
+
+# Hooks
+
+Use the hooks when you want to keep your own UI but still skip the wallet/transaction/API plumbing. All hooks must be called from a descendant of `<RecurProvider>`.
+
+Every action hook returns the same shape:
+
+```ts
+{
+  // action invocation (varies per hook)
+  isLoading: boolean;
+  error: RecurError | null;
+  reset: () => void;
+}
+```
+
+Every query hook returns:
+
+```ts
+{
+  data: T | null;
+  isLoading: boolean;
+  error: RecurError | null;
+  refetch: () => Promise<void>;
+}
+```
+
+## `useRecur()`
+
+Access the configured `RecurClient`, current cluster, and connection state.
+
+```tsx
+const { client, cluster } = useRecur();
+```
+
+## `useAuth()`
+
+Manage the Recur JWT for the connected wallet. The provider auto-loads cached sessions from `sessionStorage`; this hook exposes manual sign-in and `ensureAuthenticated()` (returns a fresh JWT, signing in if needed).
+
+```tsx
+const { signIn, signOut, ensureAuthenticated, session, isLoading } = useAuth();
+```
+
+## `useSubscribe()`
+
+```tsx
+const { subscribe, isLoading, error, data } = useSubscribe();
+await subscribe({ appId, planId, delegationCycles: 24 });
+```
+
+Internally: `client.getPlan` → `client.subscribe(wallet, options, token)` (build → sign → confirm → register).
+
+## `useMySubscriptions()`
+
+```tsx
+const { data, isLoading, refetch } = useMySubscriptions();
+```
+
+Returns the connected subscriber's subscriptions; auto-fetches on wallet/auth change.
+
+## `usePlan(appId, planId)` / `usePlans(appId)`
+
+Read-only plan lookups. No auth required.
+
+## `useCancelSubscription()`
+
+```tsx
+const { cancel, isLoading, error } = useCancelSubscription();
+await cancel(subscription, "request"); // or "instant"
+```
+
+`"request"` (default) → `request_cancel` (prepaid time honored).
+`"instant"` → `subscriber_cancel` (immediate close, prepaid time forfeited).
+
+## `useReapprove()`
+
+```tsx
+const { reapprove, isLoading } = useReapprove();
+await reapprove({ subscription, cycles: 24 });
+```
+
+Re-runs the SPL Token `approve` so the keeper can keep pulling. Use this when delegation is exhausted (after `cycles` payments) or if the subscriber manually revoked it.

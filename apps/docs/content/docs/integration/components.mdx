@@ -1,0 +1,80 @@
+---
+title: Components
+description: Drop-in React components for subscribe, sign-in, manage, and re-approve flows.
+---
+
+# Components
+
+All components are exported from `@recur/react` and require a `<RecurProvider>` ancestor. They use sensible inline styles out of the box; import the optional stylesheet for the branded look.
+
+```tsx
+import "@recur/react/styles.css"; // optional branded theme
+```
+
+## `<RecurProvider>`
+
+Mount once near the root of your app.
+
+| Prop | Type | Required | Description |
+|---|---|---|---|
+| `apiBaseUrl` | `string` | yes | Your Recur API origin (e.g. `https://api.recur.foundation`) |
+| `cluster` | `"devnet" \| "mainnet-beta"` | yes | Picks default RPC, program ID, USDC mint |
+| `rpcUrl` | `string` | no | Override the cluster's default RPC |
+| `wallets` | `WalletAdapter[]` | no | Provide your own `@solana/wallet-adapter-react` adapters; auto-detected if omitted |
+| `disableAuth` | `boolean` | no | Skip the JWT sign-in helper if you handle auth yourself |
+| `disableWallet` | `boolean` | no | Bring your own wallet provider above `<RecurProvider>` |
+
+## `<SubscribeButton>`
+
+One-click subscribe. Connects wallet → signs in → delegates USDC → registers with Recur API.
+
+```tsx
+<SubscribeButton appId="app_xxx" planId="plan_xxx">
+  Subscribe — $9.99/month
+</SubscribeButton>
+```
+
+| Prop | Type | Description |
+|---|---|---|
+| `appId` | `string` | The merchant app the plan belongs to |
+| `planId` | `string` | The plan to subscribe to |
+| `delegationCycles?` | `number` | Cycles of USDC to pre-approve. Default `12` |
+| `onSuccess?` | `(s: SubscriptionInfo) => void` | Called after registration |
+| `onError?` | `(e: RecurError) => void` | Called on any failure |
+| `children` | `ReactNode` | Button label |
+
+## `<SignInButton>`
+
+Just the JWT step (nonce → sign message → verify) without a transaction. Useful if you want to show subscription history before forcing a subscribe.
+
+## `<ConnectButton>`
+
+A minimal wallet-connect button if `<RecurProvider>` is detecting wallets. Exposes connection state via `useRecur()`.
+
+## `<ManageSubscriptionsCard>`
+
+Renders the connected wallet's active subscriptions with cancel and re-approve actions. Embeds `<ReapproveModal>` for delegation top-ups.
+
+| Prop | Type | Description |
+|---|---|---|
+| `cancelMode?` | `"request" \| "instant"` | Default `"request"` (preserves prepaid time). `"instant"` calls `subscriber_cancel` and forfeits the remainder of the period |
+
+## `<ReapproveModal>`
+
+Standalone modal for re-approving USDC delegation when an existing subscription's delegation is exhausted or revoked. Already embedded in `<ManageSubscriptionsCard>`; expose it directly only if you build a custom management UI.
+
+## `<ErrorMessage>`
+
+`role="alert"` wrapper that renders a `RecurError` with a sensible default message. Matches the styling of the other components.
+
+## Styling
+
+Every component renders with inline-style fallbacks so it looks reasonable without any CSS. Import `@recur/react/styles.css` for the full branded look (focus rings, hover, dark-mode media query). All colors use `recur-*` CSS variables you can override:
+
+```css
+:root {
+  --recur-primary: #...;
+  --recur-bg: #...;
+  --recur-text: #...;
+}
+```

@@ -1,0 +1,88 @@
+---
+title: Server-side helpers
+description: Drive subscriptions from a backend or Node script using RecurClient.
+---
+
+# Server-side helpers
+
+The same four high-level operations available to the React hooks are exposed directly on `RecurClient`. Use these from a Node service, an API route, a test fixture, or a custom signing flow.
+
+```ts
+import { RecurClient, getClusterDefaults } from "@recur/sdk";
+
+const defaults = getClusterDefaults("devnet");
+const client = new RecurClient({
+  apiBaseUrl: process.env.RECUR_API_URL!,
+  rpcUrl: defaults.rpcUrl,
+  apiKey: process.env.RECUR_API_KEY, // optional, only for merchant routes
+});
+```
+
+All four methods take a `RecurWallet` (anything with `publicKey`, `signTransaction`, and `signMessage`). A keypair on the server can implement this interface directly; a browser passes the wallet adapter.
+
+## `client.authenticate(wallet)`
+
+```ts
+const token = await client.authenticate(wallet);
+```
+
+Runs nonce → `signMessage` → verify against `/auth/verify` and returns a JWT. Cache it yourself (the React provider does this for you in the browser).
+
+## `client.subscribe(wallet, options, token)`
+
+```ts
+const { subscriptionPda, signature, subscription } = await client.subscribe(
+  wallet,
+  {
+    appId: "app_xxx",
+    planId: "plan_xxx",
+    merchantWallet: plan.app.merchant.walletAddress,
+    planSeed: plan.planSeed,
+    amount: Number(plan.amountBaseUnits),
+    intervalSeconds: plan.intervalSeconds,
+    delegationCycles: 12,
+  },
+  token,
+);
+```
+
+Builds the approve + initialize_subscription transaction, signs and confirms it, then registers the new subscription with the Recur API. Returns the on-chain PDA, the transaction signature, and the registered `SubscriptionInfo`.
+
+## `client.cancel(wallet, options)`
+
+```ts
+await client.cancel(wallet, {
+  merchantWallet,
+  planSeed,
+  mode: "request", // default; "instant" forfeits prepaid time
+});
+```
+
+## `client.reapprove(wallet, options)`
+
+```ts
+await client.reapprove(wallet, {
+  merchantWallet,
+  planSeed,
+  amount: Number(plan.amountBaseUnits),
+  delegationCycles: 24,
+});
+```
+
+Re-runs `spl-token approve` for the existing subscription PDA so the keeper can pull again.
+
+## Errors
+
+Every method throws a typed subclass of `RecurError`:
+
+| Error | When |
+|---|---|
+| `WalletRejectedError` | User declined the prompt |
+| `InsufficientFundsError` | Subscriber's USDC balance can't cover the next payment |
+| `DelegationExhaustedError` | Approval used up — call `reapprove()` |
+| `PlanInactiveError` | Plan was disabled by the merchant |
+| `SubscriptionAlreadyExistsError` | Subscriber already has an active sub on this plan |
+| `NetworkError` | RPC or API unreachable |
+| `AuthError` | JWT invalid/expired |
+
+Check with `instanceof` — the React `<ErrorMessage>` component does this automatically.

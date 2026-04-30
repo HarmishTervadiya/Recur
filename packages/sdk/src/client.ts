@@ -5,11 +5,9 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import {
-  TOKEN_PROGRAM_ID,
   getAssociatedTokenAddressSync,
   createApproveInstruction,
 } from "@solana/spl-token";
-import { BorshCoder, type Idl } from "@coral-xyz/anchor";
 import {
   PROGRAM_ID as DEFAULT_PROGRAM_ID,
   USDC_MINT_DEVNET,
@@ -17,6 +15,7 @@ import {
   planSeedToBuffer,
   planSeedToArray,
 } from "@recur/solana-client";
+import crypto from "crypto";
 
 import type {
   RecurConfig,
@@ -33,20 +32,13 @@ import type {
   RegisterSubscriptionOptions,
   ListOptions,
 } from "./types.js";
+import { request, type HttpOptions } from "./internal/http.js";
 
-// ---------------------------------------------------------------------------
-// Minimal IDL fragment — just enough for instruction encoding/decoding.
-// This avoids depending on a full Anchor IDL JSON file.
-// ---------------------------------------------------------------------------
-
-const SUBSCRIPTION_ACCOUNT_SIZE = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 8 + 1; // discriminator + fields
-
-// Instruction discriminators (first 8 bytes of sha256("global:<name>"))
-import crypto from "crypto";
+const SUBSCRIPTION_ACCOUNT_SIZE = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 8 + 1;
 
 function ixDiscriminator(name: string): Buffer {
   return Buffer.from(
-    crypto.createHash("sha256").update(`global:${name}`).digest()
+    crypto.createHash("sha256").update(`global:${name}`).digest(),
   ).subarray(0, 8);
 }
 
@@ -55,16 +47,12 @@ const IX_REQUEST_CANCEL = ixDiscriminator("request_cancel");
 const IX_FINALIZE_CANCEL = ixDiscriminator("finalize_cancel");
 const IX_SUBSCRIBER_CANCEL = ixDiscriminator("subscriber_cancel");
 
-// ---------------------------------------------------------------------------
-// RecurClient
-// ---------------------------------------------------------------------------
-
 export class RecurClient {
   readonly connection: Connection;
   readonly programId: PublicKey;
   readonly usdcMint: PublicKey;
   readonly apiBaseUrl: string;
-  private readonly apiKey?: string;
+  private readonly http: HttpOptions;
 
   constructor(config: RecurConfig) {
     this.connection = new Connection(config.rpcUrl, "confirmed");
@@ -75,12 +63,8 @@ export class RecurClient {
       ? new PublicKey(config.usdcMint)
       : USDC_MINT_DEVNET;
     this.apiBaseUrl = config.apiBaseUrl.replace(/\/$/, "");
-    this.apiKey = config.apiKey;
+    this.http = { baseUrl: this.apiBaseUrl, apiKey: config.apiKey };
   }
-
-  // =========================================================================
-  // On-chain reads
-  // =========================================================================
 
   /**
    * Fetch and deserialize a Subscription PDA account.
@@ -93,7 +77,7 @@ export class RecurClient {
     if (!info || info.data.length < SUBSCRIPTION_ACCOUNT_SIZE) return null;
 
     const data = info.data;
-    let offset = 8; // skip discriminator
+    let offset = 8;
 
     const subscriber = new PublicKey(data.subarray(offset, offset + 32));
     offset += 32;
@@ -126,9 +110,7 @@ export class RecurClient {
     };
   }
 
-  /**
-   * Derive the subscription PDA for given parameters.
-   */
+  /** Derive the subscription PDA for given parameters. */
   deriveSubscriptionPda(
     subscriber: PublicKey,
     merchant: PublicKey,
@@ -144,15 +126,8 @@ export class RecurClient {
     return { pda, bump };
   }
 
-  // =========================================================================
-  // Subscriber — transaction builders
-  // =========================================================================
-
   /**
    * Build instructions to create a new subscription on-chain.
-   * 
-   * Returns the instructions array — the caller (wallet adapter) signs and
-   * sends the transaction.
    *
    * Instructions:
    *   1. SPL Token `approve` — delegate subscription PDA to pull funds
@@ -173,13 +148,11 @@ export class RecurClient {
       this.programId,
     );
 
-    // Subscriber's USDC ATA
     const subscriberAta = getAssociatedTokenAddressSync(
       this.usdcMint,
       subscriberWallet,
     );
 
-    // Delegation: approve the subscription PDA as delegate for N cycles
     const cycles = options.delegationCycles ?? 12;
     const delegationAmount = BigInt(options.amount) * BigInt(cycles);
 
@@ -190,8 +163,6 @@ export class RecurClient {
       delegationAmount,
     );
 
-    // Build initialize_subscription instruction manually
-    // Layout: discriminator(8) + amount(u64 LE) + interval(u64 LE) + plan_seed([u8;8])
     const ixData = Buffer.alloc(8 + 8 + 8 + 8);
     IX_INITIALIZE_SUBSCRIPTION.copy(ixData, 0);
     ixData.writeBigUInt64LE(BigInt(options.amount), 8);
@@ -209,11 +180,7 @@ export class RecurClient {
       data: ixData,
     });
 
-    return {
-      subscriptionPda,
-      instructions: [approveIx, initIx],
-      bump,
-    };
+    return { subscriptionPda, instructions: [approveIx, initIx], bump };
   }
 
   /**
@@ -255,15 +222,12 @@ export class RecurClient {
       delegationAmount,
     );
 
-    return {
-      subscriptionPda,
-      instructions: [approveIx],
-    };
+    return { subscriptionPda, instructions: [approveIx] };
   }
 
   /**
    * Build the `request_cancel` instruction.
-   * The authority (signer) must be either the subscriber or merchant.
+   * Authority (signer) must be subscriber or merchant; preserves prepaid time.
    */
   buildCancelTransaction(
     authorityWallet: PublicKey,
@@ -299,12 +263,9 @@ export class RecurClient {
 
   /**
    * Build the `finalize_cancel` instruction.
-   * Permissionless — anyone can call once cancel_requested_at > 0 and the
-   * paid period has elapsed. Closes the PDA and refunds rent to subscriber.
+   * Permissionless — closes the PDA after the paid period elapses.
    */
-  buildFinalizeCancelTransaction(
-    options: CancelOptions,
-  ): CancelTransaction {
+  buildFinalizeCancelTransaction(options: CancelOptions): CancelTransaction {
     const subscriberPubkey = new PublicKey(options.subscriberWallet);
     const merchantPubkey = new PublicKey(options.merchantWallet);
     const seedBuf = planSeedToBuffer(options.planSeed);
@@ -334,8 +295,7 @@ export class RecurClient {
 
   /**
    * Build the `subscriber_cancel` instruction.
-   * Subscriber-only — closes the PDA immediately, refunds rent to subscriber.
-   * Subscriber forfeits any prepaid time. No time check, no merchant approval.
+   * Closes the PDA immediately; subscriber forfeits any prepaid time.
    */
   buildSubscriberCancelTransaction(
     subscriberWallet: PublicKey,
@@ -367,183 +327,100 @@ export class RecurClient {
     return { instructions: [cancelIx] };
   }
 
-  // =========================================================================
-  // API helpers (shared)
-  // =========================================================================
-
-  private async apiFetch<T>(
-    path: string,
-    options: RequestInit = {},
-  ): Promise<ApiResponse<T>> {
-    // Caller-supplied headers take precedence over the stored API key.
-    // This allows subscriber methods to pass a per-call Bearer token
-    // without it being overwritten by the merchant API key.
-    const callerHeaders = (options.headers as Record<string, string> | undefined) ?? {};
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      ...callerHeaders,
-    };
-
-    if (this.apiKey && !callerHeaders["Authorization"]) {
-      headers["Authorization"] = `Bearer ${this.apiKey}`;
-    }
-
-    const url = `${this.apiBaseUrl}${path}`;
-
-    try {
-      const res = await fetch(url, { ...options, headers });
-      return (await res.json()) as ApiResponse<T>;
-    } catch {
-      return {
-        success: false,
-        data: null,
-        error: { code: "NETWORK_ERROR", message: "Failed to reach Recur API" },
-      };
-    }
-  }
-
-  // =========================================================================
-  // Public API — Plan queries (no auth needed)
-  // =========================================================================
-
-  /**
-   * Fetch all active plans for an app (public endpoint).
-   */
+  /** Fetch all active plans for an app (public). */
   async getPlans(appId: string): Promise<ApiResponse<PlanInfo[]>> {
-    const params = new URLSearchParams({ appId });
-    return this.apiFetch<PlanInfo[]>(`/plans?${params.toString()}`);
+    return request<PlanInfo[]>(this.http, "/plans", { query: { appId } });
   }
 
-  /**
-   * Fetch a single plan by ID with merchant info (public endpoint).
-   */
+  /** Fetch a single plan by ID with merchant info (public). */
   async getPlan(appId: string, planId: string): Promise<ApiResponse<PlanInfo>> {
-    const params = new URLSearchParams({ appId });
-    return this.apiFetch<PlanInfo>(`/plans/${planId}?${params.toString()}`);
+    return request<PlanInfo>(this.http, `/plans/${planId}`, { query: { appId } });
   }
 
-  // =========================================================================
-  // Merchant API — requires API key
-  // =========================================================================
-
-  /**
-   * Create a new plan for an app. Requires API key.
-   */
+  /** Create a new plan for an app. Requires API key. */
   async createPlan(options: CreatePlanOptions): Promise<ApiResponse<PlanInfo>> {
-    return this.apiFetch<PlanInfo>(`/merchant/apps/${options.appId}/plans`, {
+    return request<PlanInfo>(this.http, `/merchant/apps/${options.appId}/plans`, {
       method: "POST",
-      body: JSON.stringify({
+      body: {
         name: options.name,
         description: options.description,
         amountBaseUnits: options.amountBaseUnits,
         intervalSeconds: options.intervalSeconds,
-      }),
+      },
     });
   }
 
-  /**
-   * List plans for a merchant's app. Requires API key.
-   */
+  /** List plans for a merchant's app. Requires API key. */
   async listPlans(appId: string): Promise<ApiResponse<PlanInfo[]>> {
-    return this.apiFetch<PlanInfo[]>(`/merchant/apps/${appId}/plans`);
+    return request<PlanInfo[]>(this.http, `/merchant/apps/${appId}/plans`);
   }
 
-  /**
-   * List subscriptions for a merchant's app. Requires API key.
-   */
+  /** List subscriptions for a merchant's app. Requires API key. */
   async listSubscriptions(
     appId: string,
     options?: ListOptions,
   ): Promise<ApiResponse<SubscriptionInfo[]>> {
-    const params = new URLSearchParams();
-    if (options?.page) params.set("page", String(options.page));
-    if (options?.limit) params.set("limit", String(options.limit));
-    const qs = params.toString();
-    return this.apiFetch<SubscriptionInfo[]>(
-      `/merchant/apps/${appId}/subscriptions${qs ? `?${qs}` : ""}`,
+    return request<SubscriptionInfo[]>(
+      this.http,
+      `/merchant/apps/${appId}/subscriptions`,
+      { query: { page: options?.page, limit: options?.limit } },
     );
   }
 
-  /**
-   * Get payment history for a merchant's app. Requires API key.
-   */
+  /** Get payment history for a merchant's app. Requires API key. */
   async getPaymentHistory(
     appId: string,
     options?: ListOptions,
   ): Promise<ApiResponse<TransactionInfo[]>> {
-    const params = new URLSearchParams();
-    if (options?.page) params.set("page", String(options.page));
-    if (options?.limit) params.set("limit", String(options.limit));
-    const qs = params.toString();
-    return this.apiFetch<TransactionInfo[]>(
-      `/merchant/apps/${appId}/transactions${qs ? `?${qs}` : ""}`,
+    return request<TransactionInfo[]>(
+      this.http,
+      `/merchant/apps/${appId}/transactions`,
+      { query: { page: options?.page, limit: options?.limit } },
     );
   }
 
-  // =========================================================================
-  // Subscriber API — requires subscriber JWT (passed per-call, not stored)
-  // =========================================================================
-
   /**
    * Register a newly-created on-chain subscription with the Recur API.
-   * Call this after the initialize_subscription transaction confirms on-chain.
-   *
-   * @param options  - appId + planId + subscriptionPda
-   * @param authToken - Subscriber JWT from the nonce→sign→verify auth flow
+   * Call this after the initialize_subscription transaction confirms.
    */
   async registerSubscription(
     options: RegisterSubscriptionOptions,
     authToken: string,
   ): Promise<ApiResponse<SubscriptionInfo>> {
-    return this.apiFetch<SubscriptionInfo>("/subscriber/subscriptions", {
+    return request<SubscriptionInfo>(this.http, "/subscriber/subscriptions", {
       method: "POST",
-      body: JSON.stringify({
+      body: {
         appId: options.appId,
         planId: options.planId,
         subscriptionPda: options.subscriptionPda,
-      }),
-      headers: { Authorization: `Bearer ${authToken}` },
+      },
+      authToken,
     });
   }
 
-  /**
-   * Fetch all subscriptions for the authenticated subscriber.
-   *
-   * @param authToken - Subscriber JWT
-   * @param options   - Pagination options
-   */
+  /** Fetch all subscriptions for the authenticated subscriber. */
   async getMySubscriptions(
     authToken: string,
     options?: ListOptions,
   ): Promise<ApiResponse<SubscriptionInfo[]>> {
-    const params = new URLSearchParams();
-    if (options?.page) params.set("page", String(options.page));
-    if (options?.limit) params.set("limit", String(options.limit));
-    const qs = params.toString();
-    return this.apiFetch<SubscriptionInfo[]>(
-      `/subscriber/subscriptions${qs ? `?${qs}` : ""}`,
-      { headers: { Authorization: `Bearer ${authToken}` } },
-    );
+    return request<SubscriptionInfo[]>(this.http, "/subscriber/subscriptions", {
+      authToken,
+      query: { page: options?.page, limit: options?.limit },
+    });
   }
 
   /**
    * Fetch a single subscription by its on-chain PDA address.
    * Scans the subscriber's subscriptions for a matching PDA.
-   * Falls back to the on-chain account if the API returns no match.
-   *
-   * @param subscriptionPda - Base58 PDA address
-   * @param authToken       - Subscriber JWT
    */
   async getSubscription(
     subscriptionPda: string,
     authToken: string,
   ): Promise<ApiResponse<SubscriptionInfo | null>> {
-    // Fetch all subscriber subscriptions and find by PDA
     const res = await this.getMySubscriptions(authToken);
     if (!res.success || !res.data) {
       return { success: res.success, data: null, error: res.error };
     }
-
     const match = res.data.find((s) => s.subscriptionPda === subscriptionPda) ?? null;
     return { success: true, data: match, error: null };
   }

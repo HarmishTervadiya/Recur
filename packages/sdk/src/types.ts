@@ -1,5 +1,22 @@
-import type { PublicKey, TransactionInstruction, Connection } from "@solana/web3.js";
-import type { EventType, SubscriptionStatus } from "@recur/types";
+import type {
+  PublicKey,
+  TransactionInstruction,
+  Transaction,
+  VersionedTransaction,
+} from "@solana/web3.js";
+import type { SubscriptionStatus } from "@recur/types";
+
+/**
+ * Minimal wallet interface required by high-level SDK methods.
+ *
+ * Compatible with `@solana/wallet-adapter-react`, mobile wallet adapters,
+ * and any custom signer that exposes a public key + sign methods.
+ */
+export interface RecurWallet {
+  publicKey: PublicKey;
+  signTransaction<T extends Transaction | VersionedTransaction>(tx: T): Promise<T>;
+  signMessage(message: Uint8Array): Promise<Uint8Array>;
+}
 
 // ---------------------------------------------------------------------------
 // Configuration

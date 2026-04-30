@@ -1,5 +1,8 @@
 export { RecurClient } from "./client.js";
 
+export { signAndSend } from "./internal/sign-and-send.js";
+export { unwrap } from "./internal/http.js";
+
 export { verifyWebhookSignature, parseWebhookPayload } from "./webhook.js";
 
 export {

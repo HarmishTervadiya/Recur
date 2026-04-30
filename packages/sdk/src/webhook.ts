@@ -21,22 +21,18 @@ export function verifyWebhookSignature(
   secret: string,
   toleranceSec = 300,
 ): boolean {
-  // 1. Check timestamp freshness to prevent replay attacks
   const ts = parseInt(timestamp, 10);
   if (isNaN(ts)) return false;
 
   const now = Math.floor(Date.now() / 1000);
   if (Math.abs(now - ts) > toleranceSec) return false;
 
-  // 2. Recompute HMAC: sign "${timestamp}.${body}" with the shared secret
   const expected = crypto
     .createHmac("sha256", secret)
     .update(`${timestamp}.${body}`)
     .digest("hex");
 
-  // 3. Constant-time comparison to prevent timing attacks
   const sig = signature.replace(/^sha256=/, "");
-
   if (sig.length !== expected.length) return false;
 
   return crypto.timingSafeEqual(

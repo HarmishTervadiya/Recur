@@ -1,15 +1,25 @@
-// @recur/sdk — Recur Protocol SDK
-// Non-custodial auto-pay subscriptions on Solana.
-
-// Core client
 export { RecurClient } from "./client.js";
 
-// Webhook verification (also exported as "@recur/sdk/webhook")
 export { verifyWebhookSignature, parseWebhookPayload } from "./webhook.js";
 
-// Types
+export {
+  RecurError,
+  WalletRejectedError,
+  InsufficientFundsError,
+  DelegationExhaustedError,
+  PlanInactiveError,
+  SubscriptionAlreadyExistsError,
+  NetworkError,
+  AuthError,
+  mapError,
+} from "./errors.js";
+
+export { getClusterDefaults } from "./constants.js";
+export type { Cluster, ClusterDefaults } from "./constants.js";
+
 export type {
   RecurConfig,
+  RecurWallet,
   OnChainSubscription,
   SubscribeOptions,
   SubscribeTransaction,
@@ -25,7 +35,6 @@ export type {
   ListOptions,
 } from "./types.js";
 
-// Re-export useful helpers from solana-client
 export {
   PROGRAM_ID,
   USDC_MINT_DEVNET,
@@ -35,5 +44,4 @@ export {
   planSeedToArray,
 } from "@recur/solana-client";
 
-// Re-export types from @recur/types
 export type { EventType, SubscriptionStatus, WebhookPayload } from "@recur/types";

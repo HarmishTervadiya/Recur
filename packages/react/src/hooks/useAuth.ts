@@ -1,5 +1,5 @@
 /**
- * Subscriber auth state + `signIn` / `signOut` actions.
+ * Subscriber auth state + `signIn` / `signOut` / `ensureAuthenticated` actions.
  *
  * Uses the wallet from `@solana/wallet-adapter-react` (mounted by either
  * the merchant's existing provider or `<RecurProvider>`'s fallback).
@@ -7,9 +7,10 @@
 
 import { useCallback } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import type { RecurWallet, RecurError } from "@recur/sdk";
+import type { RecurError } from "@recur/sdk";
 import { useRecur } from "./useRecur.js";
 import { useAsyncAction } from "../internal/useAsyncAction.js";
+import { useConnectedWallet } from "../internal/useConnectedWallet.js";
 
 export interface UseAuthResult {
   walletAddress: string | null;
@@ -18,27 +19,34 @@ export interface UseAuthResult {
   isAuthenticating: boolean;
   isAuthInitializing: boolean;
   error: RecurError | null;
-  signIn: () => Promise<void>;
+  signIn: () => Promise<string>;
   signOut: () => void;
+  /** Returns a valid JWT, signing in if necessary. Used by other hooks. */
+  ensureAuthenticated: () => Promise<string>;
 }
 
 export function useAuth(): UseAuthResult {
   const { authManager, session, setSession, isAuthInitializing } = useRecur();
-  const { publicKey, signMessage, signTransaction, disconnect } = useWallet();
+  const { publicKey, disconnect } = useWallet();
+  const getWallet = useConnectedWallet();
 
-  const action = useAsyncAction(async () => {
-    if (!publicKey || !signMessage || !signTransaction) {
-      throw new Error("Wallet not connected");
-    }
-    const wallet: RecurWallet = {
-      publicKey,
-      signMessage,
-      signTransaction: signTransaction as RecurWallet["signTransaction"],
-    };
-    const next = await authManager.signIn(wallet);
+  const action = useAsyncAction(async (): Promise<string> => {
+    const next = await authManager.signIn(getWallet());
     authManager.save(next);
     setSession(next);
+    return next.accessToken;
   });
+
+  const ensureAuthenticated = useCallback(async (): Promise<string> => {
+    if (session && session.expiresAt - 60_000 > Date.now()) return session.accessToken;
+    if (!publicKey) throw new Error("Wallet not connected");
+    const cached = authManager.load(publicKey.toBase58());
+    if (cached) {
+      setSession(cached);
+      return cached.accessToken;
+    }
+    return action.run();
+  }, [session, publicKey, authManager, setSession, action]);
 
   const signOut = useCallback(() => {
     if (session) authManager.clear(session.walletAddress);
@@ -53,9 +61,8 @@ export function useAuth(): UseAuthResult {
     isAuthenticating: action.isLoading,
     isAuthInitializing,
     error: action.error,
-    signIn: async () => {
-      await action.run();
-    },
+    signIn: action.run,
     signOut,
+    ensureAuthenticated,
   };
 }

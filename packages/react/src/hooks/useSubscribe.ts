@@ -1,9 +1,9 @@
 /**
- * Subscribe to a plan: fetch plan -> build approve+initialize tx ->
- * sign+send -> register with API.
+ * Subscribe to a plan via the L3 `client.subscribe()` helper.
+ * Fetches the plan, then delegates build/sign/send/register to the SDK.
  */
 
-import { signAndSend, unwrap, type PlanInfo, type SubscriptionInfo, type RecurError } from "@recur/sdk";
+import { unwrap, type PlanInfo, type SubscriptionInfo, type RecurError } from "@recur/sdk";
 import { useRecur } from "./useRecur.js";
 import { useAuth } from "./useAuth.js";
 import { useAsyncAction } from "../internal/useAsyncAction.js";
@@ -38,23 +38,20 @@ export function useSubscribe(): UseSubscribeResult {
     const merchantWallet = plan.app?.merchant.walletAddress;
     if (!merchantWallet) throw new Error("Plan missing merchant wallet");
 
-    const { subscriptionPda, instructions } = client.buildSubscribeTransaction(wallet.publicKey, {
-      planId: plan.id,
-      merchantWallet,
-      planSeed: plan.planSeed,
-      amount: Number(plan.amountBaseUnits),
-      intervalSeconds: plan.intervalSeconds,
-      delegationCycles: args.delegationCycles,
-    });
-
-    await signAndSend(client.connection, wallet, instructions);
-
-    return unwrap<SubscriptionInfo>(
-      await client.registerSubscription(
-        { appId: args.appId, planId: args.planId, subscriptionPda: subscriptionPda.toBase58() },
-        token,
-      ),
+    const { subscription } = await client.subscribe(
+      wallet,
+      {
+        planId: plan.id,
+        appId: args.appId,
+        merchantWallet,
+        planSeed: plan.planSeed,
+        amount: Number(plan.amountBaseUnits),
+        intervalSeconds: plan.intervalSeconds,
+        delegationCycles: args.delegationCycles,
+      },
+      token,
     );
+    return subscription;
   });
 
   return {

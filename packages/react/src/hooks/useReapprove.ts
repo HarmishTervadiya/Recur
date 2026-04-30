@@ -1,10 +1,9 @@
 /**
- * Re-approve delegation for an existing subscription whose delegation has
- * been exhausted or revoked. Replays an SPL Token `approve` for `cycles`
- * additional billing periods.
+ * Re-approve delegation for an existing subscription via L3
+ * `client.reapprove()`. Used when delegation is exhausted or revoked.
  */
 
-import { signAndSend, type RecurError, type SubscriptionInfo } from "@recur/sdk";
+import type { RecurError, SubscriptionInfo } from "@recur/sdk";
 import { useRecur } from "./useRecur.js";
 import { useAsyncAction } from "../internal/useAsyncAction.js";
 import { useConnectedWallet } from "../internal/useConnectedWallet.js";
@@ -32,15 +31,13 @@ export function useReapprove(): UseReapproveResult {
     if (!plan?.app?.merchant?.walletAddress) {
       throw new Error("Subscription missing plan/merchant context");
     }
-
-    const { instructions } = client.buildReapproveTransaction(wallet.publicKey, {
+    const { signature } = await client.reapprove(wallet, {
       merchantWallet: plan.app.merchant.walletAddress,
       planSeed: plan.planSeed,
       amount: Number(plan.amountBaseUnits),
       delegationCycles: cycles,
     });
-
-    return signAndSend(client.connection, wallet, instructions);
+    return signature;
   });
 
   return {

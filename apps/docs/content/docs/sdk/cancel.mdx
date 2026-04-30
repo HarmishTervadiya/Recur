@@ -5,95 +5,127 @@ description: Cancel active subscriptions.
 
 # Cancel
 
-The `buildCancelTransaction` method creates a transaction that flags an on-chain
-subscription for cancellation. The subscriber's paid period is always honored — no
-funds are lost.
+The SDK exposes three cancellation builders, covering the three on-chain
+instructions:
 
-## Method signature
+- `buildCancelTransaction` — `request_cancel` (subscriber **or** merchant)
+- `buildFinalizeCancelTransaction` — `finalize_cancel` (permissionless, after grace)
+- `buildSubscriberCancelTransaction` — `subscriber_cancel` (subscriber, immediate)
+
+The default `request_cancel` → `finalize_cancel` flow always honors the paid
+period. `subscriber_cancel` lets a subscriber exit immediately, forfeiting any
+remaining prepaid time.
+
+## `buildCancelTransaction` — request a cancel
+
+Sets `cancel_requested_at` on the subscription PDA. The subscription remains
+active until the current paid period elapses, at which point the Keeper (or
+anyone) calls `finalize_cancel` to close it.
 
 ```typescript
-const result = await recur.buildCancelTransaction(options: CancelOptions);
+const { instructions } = recur.buildCancelTransaction(authorityWallet, options);
 ```
 
-### Parameters
+`authorityWallet: PublicKey` — must be either the subscriber or merchant wallet
+that signs the transaction.
+
+`options: CancelOptions`:
 
 | Field | Type | Description |
 |---|---|---|
-| `subscriber` | `PublicKey` | The subscriber's wallet address |
-| `merchant` | `PublicKey` | The merchant's wallet address |
-| `planSeed` | `string` | 16-char hex string (8 bytes) identifying the plan |
-| `authority` | `PublicKey` | Who is cancelling — must be the subscriber or merchant |
+| `subscriptionPda` | `string` | The subscription PDA (base58) |
+| `subscriberWallet` | `string` | Subscriber wallet (used for PDA derivation) |
+| `merchantWallet` | `string` | Merchant wallet (used for PDA derivation) |
+| `planSeed` | `string` | 16-char hex plan seed |
 
-### Return value
-
-```typescript
-interface CancelTransaction {
-  transaction: Transaction;
-  subscriptionPda: PublicKey;
-}
-```
-
-## Cancellation flow
-
-Cancellation is a two-step process:
-
-### Step 1: `request_cancel`
-
-Sets `cancel_requested_at` on the subscription PDA. The subscription remains active
-until the current paid period expires.
-
-- Callable by **subscriber** or **merchant**
-- Idempotent guard prevents resetting the cancellation clock
-- Payments already due can still be collected within the paid window
-
-### Step 2: `finalize_cancel` (handled by the Keeper)
-
-After `last_payment_timestamp + interval` elapses, the Keeper calls `finalize_cancel`
-to close the PDA and refund rent to the subscriber.
-
-- **Permissionless** — anyone can call once conditions are met
-- Rent (~0.002 SOL) returns to the subscriber who paid at creation
-
-```
-subscriber calls request_cancel
-         │
-         ▼
-   cancel_requested_at = now
-         │
-         ▼
-   paid period elapses (last_payment + interval)
-         │
-         ▼
-   keeper calls finalize_cancel
-         │
-         ▼
-   PDA closed, rent refunded to subscriber
-```
-
-## Example
+Returns `{ instructions: TransactionInstruction[] }`.
 
 ```typescript title="cancel.ts"
-const { transaction } = await recur.buildCancelTransaction({
-  subscriber: subscriberWallet.publicKey,
-  merchant: merchantPubkey,
-  planSeed: "0100000000000000",
-  authority: subscriberWallet.publicKey, // subscriber cancels
-});
+const { instructions } = recur.buildCancelTransaction(
+  subscriberWallet.publicKey,
+  {
+    subscriptionPda,
+    subscriberWallet: subscriberWallet.publicKey.toBase58(),
+    merchantWallet: merchantPubkey.toBase58(),
+    planSeed: "0100000000000000",
+  },
+);
 
-const signature = await sendTransaction(transaction, connection);
+const tx = new Transaction().add(...instructions);
+const signature = await sendTransaction(tx, connection);
+```
+
+## `buildFinalizeCancelTransaction` — close after grace
+
+Permissionless — anyone can call once `cancel_requested_at > 0` and the paid
+period has elapsed. Closes the PDA and refunds rent (~0.002 SOL) to the
+subscriber.
+
+```typescript
+const { instructions } = recur.buildFinalizeCancelTransaction({
+  subscriptionPda,
+  subscriberWallet: subscriberPubkey.toBase58(),
+  merchantWallet: merchantPubkey.toBase58(),
+  planSeed: "0100000000000000",
+});
+```
+
+Most apps don't need to call this directly — the Keeper finalizes cancellations
+automatically. It's exposed for self-hosting and recovery scenarios.
+
+## `buildSubscriberCancelTransaction` — immediate cancel
+
+Subscriber-only. Closes the PDA immediately, no time check, no merchant approval.
+The subscriber forfeits any remaining prepaid time but their wallet is freed
+from the delegation right away.
+
+```typescript
+const { instructions } = recur.buildSubscriberCancelTransaction(
+  subscriberWallet.publicKey,
+  {
+    merchantWallet: merchantPubkey.toBase58(),
+    planSeed: "0100000000000000",
+  },
+);
+
+const tx = new Transaction().add(...instructions);
+await sendTransaction(tx, connection);
+```
+
+After the on-chain tx confirms, POST to
+`/subscriber/subscriptions/:id/cancel` with the subscriber JWT so the database
+status is flipped to `cancelled` immediately. The Keeper's `forceCancel` job is
+the backup detector if that API call fails.
+
+Merchants cannot call `subscriber_cancel`. Merchants who need to cancel a
+subscription must use the standard `request_cancel` → `finalize_cancel` flow.
+
+## Cancellation flow summary
+
+```
+request_cancel  ─────────────────────────────────►  cancel_requested_at = now
+                                                              │
+                                                              ▼
+                                          paid period elapses (last_payment + interval)
+                                                              │
+                                                              ▼
+finalize_cancel (permissionless)  ─────────────►   PDA closed, rent → subscriber
+
+subscriber_cancel  ──────────────►   PDA closed immediately, prepaid time forfeited
 ```
 
 ## Force cancel
 
-If a subscriber revokes their token delegation (removes the approve), the Keeper
-detects this and calls `force_cancel` to immediately close the PDA. This is a
-protocol safety mechanism — only the Keeper can call it.
+If a subscriber revokes their token delegation (removes the SPL approve), the
+Keeper detects this and calls `force_cancel` on-chain to close the PDA. This is
+a protocol safety mechanism — the on-chain `keeper: Signer` constraint enforces
+that only the Keeper can sign it.
 
 ## Error cases
 
 | Error | Cause |
 |---|---|
-| `UnauthorizedCancellation` | Authority is neither subscriber nor merchant |
+| `UnauthorizedCancellation` | Authority is neither subscriber nor merchant (request) or not the subscriber (subscriber_cancel) |
 | `CancelAlreadyRequested` | `cancel_requested_at` is already non-zero |
 | `NoCancelRequested` | Trying to finalize without a cancel request |
 | `PaidPeriodNotElapsed` | Current paid period hasn't expired yet |

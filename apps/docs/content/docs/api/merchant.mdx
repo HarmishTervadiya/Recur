@@ -102,12 +102,16 @@ Authorization: Bearer <token>
 
 {
   "url": "https://example.com/webhooks/recur",
-  "events": ["payment.success", "payment.failed", "subscription.cancelled"]
+  "events": ["payment_success", "payment_failed", "cancel_finalized"]
 }
 ```
 
 Returns the webhook `id` and `secret`. The secret is used for HMAC signature
-verification. Store it securely.
+verification. Store it securely — it cannot be retrieved again.
+
+Valid event names: `subscription_created`, `payment_success`, `payment_failed`,
+`cancel_requested`, `cancel_finalized`, `cancel_forced`. An empty `events` array
+subscribes to all events.
 
 Limited to **1 webhook endpoint per app**.
 

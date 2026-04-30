@@ -5,23 +5,43 @@ description: TypeScript SDK for integrating Recur Protocol.
 
 # SDK
 
-The `@recur/sdk` package provides everything you need to integrate Recur Protocol into your application.
+The `@recur/sdk` package provides everything you need to integrate Recur Protocol
+into your application — transaction builders for the on-chain program, REST API
+wrappers, and webhook signature verification.
 
 ## For subscribers
 
 Build transactions that create on-chain subscriptions and manage token delegation:
 
 - [Quickstart](/docs/sdk/quickstart) — install, configure, and create your first subscription
-- [Subscribe](/docs/sdk/subscribe) — build subscribe transactions
-- [Cancel](/docs/sdk/cancel) — cancel active subscriptions
+- [Subscribe](/docs/sdk/subscribe) — `buildSubscribeTransaction`, `buildReapproveTransaction`
+- [Cancel](/docs/sdk/cancel) — `buildCancelTransaction`, `buildFinalizeCancelTransaction`, `buildSubscriberCancelTransaction`
+- [Subscriptions](/docs/sdk/subscriptions) — `getMySubscriptions`, `getSubscription`, `registerSubscription`, `getSubscriptionAccount`, `deriveSubscriptionPda`
 
 ## For merchants
 
-REST API wrappers authenticated with API keys:
+REST API wrappers authenticated with API keys (passed once via the constructor):
 
-- [Plans](/docs/sdk/plans) — create and manage subscription plans
-- [Subscriptions](/docs/sdk/subscriptions) — query subscriber data
+- [Plans](/docs/sdk/plans) — `createPlan`, `listPlans`, `getPlan`, `getPlans`
+- [Subscriptions](/docs/sdk/subscriptions) — `listSubscriptions`, `getPaymentHistory`
 
 ## Webhooks
 
-- [Webhooks](/docs/sdk/webhooks) — verify and handle payment event notifications
+- [Webhooks](/docs/sdk/webhooks) — `verifyWebhookSignature`, `parseWebhookPayload`
+
+## Re-exports
+
+The SDK also re-exports useful helpers and types so you don't need to depend on
+`@recur/solana-client` or `@recur/types` directly:
+
+| Re-export | Source | Description |
+|---|---|---|
+| `PROGRAM_ID` | `@recur/solana-client` | Default devnet program ID |
+| `USDC_MINT_DEVNET` | `@recur/solana-client` | Devnet mock USDC mint |
+| `findSubscriptionPda` | `@recur/solana-client` | PDA derivation |
+| `findTreasuryVaultPda` | `@recur/solana-client` | Treasury PDA derivation |
+| `planSeedToBuffer` | `@recur/solana-client` | Hex → 8-byte Buffer |
+| `planSeedToArray` | `@recur/solana-client` | Hex → `number[]` for Anchor |
+| `EventType` | `@recur/types` | Webhook event union |
+| `SubscriptionStatus` | `@recur/types` | `active \| past_due \| cancelled` |
+| `WebhookPayload` | `@recur/types` | Webhook payload shape |

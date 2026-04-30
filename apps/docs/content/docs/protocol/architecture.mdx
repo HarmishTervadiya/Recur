@@ -40,7 +40,7 @@ seed collisions.
 
 ## Account layout
 
-### Subscription (121 bytes + 8 discriminator)
+### Subscription (121 bytes total — 8 discriminator + 113 fields)
 
 | Offset | Size | Field | Type |
 |---|---|---|---|
@@ -64,6 +64,7 @@ seed collisions.
 | `process_payment` | Keeper | Pull funds: subscriber → merchant (net) + treasury (fee) |
 | `request_cancel` | Subscriber or Merchant | Flag subscription for cancellation |
 | `finalize_cancel` | Permissionless | Close PDA after paid period elapses, refund rent |
+| `subscriber_cancel` | Subscriber | Immediately close PDA — subscriber forfeits prepaid time |
 | `force_cancel` | Keeper | Close PDA when delegation is revoked |
 
 ### Treasury management

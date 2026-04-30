@@ -5,57 +5,76 @@ description: Build and send subscribe transactions.
 
 # Subscribe
 
-The `buildSubscribeTransaction` method creates a transaction that initializes an on-chain
-Subscription PDA and delegates the subscriber's USDC tokens to it.
+The `buildSubscribeTransaction` method returns the instructions needed to initialize
+an on-chain Subscription PDA and delegate the subscriber's USDC tokens to it. The
+caller is responsible for assembling and sending the transaction.
 
 ## Method signature
 
 ```typescript
-const result = await recur.buildSubscribeTransaction(options: SubscribeOptions);
+const { subscriptionPda, instructions, bump } = recur.buildSubscribeTransaction(
+  subscriberWallet,
+  options,
+);
 ```
 
 ### Parameters
 
-| Field | Type | Description |
-|---|---|---|
-| `subscriber` | `PublicKey` | The subscriber's wallet address (must sign) |
-| `merchant` | `PublicKey` | The merchant's wallet address |
-| `planSeed` | `string` | 16-char hex string (8 bytes) identifying the plan |
-| `amount` | `number` | Payment amount in USDC base units (6 decimals). `5_000_000` = $5.00 |
-| `interval` | `number` | Billing interval in seconds. `2_592_000` = 30 days |
-| `cycles` | `number?` | Number of billing cycles to approve. Default: `undefined` (approves max) |
+`subscriberWallet: PublicKey` — the subscriber's wallet (must sign the resulting
+transaction). Passed positionally as the first argument.
+
+`options: SubscribeOptions`:
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `planId` | `string` | Yes | Plan ID from the Recur API (cuid) |
+| `merchantWallet` | `string` | Yes | Merchant's wallet address (base58) |
+| `planSeed` | `string` | Yes | 16-char hex string (8 bytes) identifying the plan |
+| `amount` | `number` | Yes | Payment amount in USDC base units (6 decimals). `5_000_000` = $5.00 |
+| `intervalSeconds` | `number` | Yes | Billing interval in seconds. `2_592_000` = 30 days |
+| `delegationCycles` | `number?` | No | How many billing cycles to pre-approve. Default `12` |
+
+The SPL token approve amount is `amount × delegationCycles`. When the delegation is
+exhausted, call [`buildReapproveTransaction`](#re-approving-an-exhausted-delegation)
+to top it up without touching the on-chain subscription.
 
 ### Return value
 
 ```typescript
 interface SubscribeTransaction {
-  transaction: Transaction;
   subscriptionPda: PublicKey;
+  instructions: TransactionInstruction[];
   bump: number;
 }
 ```
 
 | Field | Description |
 |---|---|
-| `transaction` | Unsigned Solana `Transaction` with approve + initialize instructions |
 | `subscriptionPda` | The derived PDA address for this subscription |
-| `bump` | The PDA bump seed (useful for verification) |
+| `instructions` | The two raw instructions: SPL approve + `initialize_subscription` |
+| `bump` | The PDA bump seed |
+
+The SDK returns raw instructions rather than a `Transaction` object so the caller
+can compose them into a versioned transaction, prepend a `ComputeBudget`
+instruction, or batch with other operations.
 
 ## Transaction contents
 
-The returned transaction contains exactly **2 instructions**:
+The returned `instructions` array always contains exactly **2 instructions**:
 
 ### 1. SPL Token Approve
 
-Delegates USDC from the subscriber's Associated Token Account (ATA) to the Subscription PDA.
+Delegates USDC from the subscriber's Associated Token Account (ATA) to the
+Subscription PDA.
 
-- **Amount**: `cycles × amount` if cycles is specified, otherwise the full balance delegation
+- **Amount**: `amount × delegationCycles` (default 12 cycles)
 - **Delegate**: the Subscription PDA
 - **Owner**: the subscriber (signer)
 
 ### 2. Initialize Subscription
 
-Creates the on-chain Subscription PDA with seeds `["subscription", subscriber, merchant, plan_seed]`.
+Creates the on-chain Subscription PDA with seeds
+`["subscription", subscriber, merchant, plan_seed]`.
 
 **Instruction data** (32 bytes):
 - Bytes 0–7: Anchor discriminator for `initialize_subscription`
@@ -88,14 +107,24 @@ const [pda, bump] = findSubscriptionPda(
 );
 ```
 
-Seeds: `["subscription", subscriber.toBytes(), merchant.toBytes(), plan_seed]`
+Or via the client helper, which returns `{ pda, bump }`:
 
-This means each subscriber–merchant–plan combination has exactly one subscription PDA. Attempting to create a duplicate will fail with an "already in use" error.
+```typescript
+const { pda, bump } = recur.deriveSubscriptionPda(
+  subscriberPubkey,
+  merchantPubkey,
+  "0100000000000000",
+);
+```
+
+Each subscriber–merchant–plan combination has exactly one subscription PDA.
+Attempting to create a duplicate will fail with an "already in use" error.
 
 ## Example: React integration
 
 ```typescript title="useSubscribe.ts"
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { Transaction } from "@solana/web3.js";
 import { RecurClient } from "@recur/sdk";
 
 export function useSubscribe() {
@@ -103,33 +132,60 @@ export function useSubscribe() {
   const { publicKey, sendTransaction } = useWallet();
 
   const subscribe = async (
-    merchant: PublicKey,
+    planId: string,
+    merchantWallet: string,
     planSeed: string,
     amount: number,
-    interval: number,
+    intervalSeconds: number,
   ) => {
     if (!publicKey) throw new Error("Wallet not connected");
 
     const recur = new RecurClient({
       rpcUrl: connection.rpcEndpoint,
+      apiBaseUrl: process.env.NEXT_PUBLIC_RECUR_API_URL!,
     });
 
-    const { transaction } = await recur.buildSubscribeTransaction({
-      subscriber: publicKey,
-      merchant,
-      planSeed,
-      amount,
-      interval,
-    });
+    const { subscriptionPda, instructions } = recur.buildSubscribeTransaction(
+      publicKey,
+      { planId, merchantWallet, planSeed, amount, intervalSeconds },
+    );
 
-    const signature = await sendTransaction(transaction, connection);
+    const tx = new Transaction().add(...instructions);
+    const signature = await sendTransaction(tx, connection);
     await connection.confirmTransaction(signature, "confirmed");
-    return signature;
+
+    return { signature, subscriptionPda: subscriptionPda.toBase58() };
   };
 
   return { subscribe };
 }
 ```
+
+After the on-chain transaction confirms, call
+[`registerSubscription`](/docs/sdk/subscriptions#register-an-on-chain-subscription)
+with the subscriber JWT to record the subscription in the Recur database. The
+Keeper's chain scanner will pick it up as a fallback if the API call is missed.
+
+## Re-approving an exhausted delegation
+
+Once `delegationCycles` worth of payments have been pulled, the SPL approve runs
+out and the next `process_payment` will fail. The on-chain subscription is still
+active — the subscriber just needs to re-delegate.
+
+```typescript
+const { instructions } = recur.buildReapproveTransaction(publicKey, {
+  merchantWallet,
+  planSeed,
+  amount,
+  delegationCycles: 12, // optional; defaults to 12
+});
+
+const tx = new Transaction().add(...instructions);
+await sendTransaction(tx, connection);
+```
+
+This emits a single SPL `approve` instruction for `amount × delegationCycles`
+against the existing subscription PDA — no on-chain subscription state is touched.
 
 ## Error cases
 

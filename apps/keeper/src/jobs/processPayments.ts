@@ -1,9 +1,14 @@
 import {
   PublicKey,
   Transaction,
+  TransactionInstruction,
   sendAndConfirmTransaction,
 } from "@solana/web3.js";
-import { getAssociatedTokenAddressSync, getAccount } from "@solana/spl-token";
+import {
+  getAssociatedTokenAddressSync,
+  getAccount,
+  createAssociatedTokenAccountIdempotentInstruction,
+} from "@solana/spl-token";
 import { prisma } from "@recur/db";
 import { createLogger } from "@recur/logger";
 import { env } from "@recur/config";
@@ -91,40 +96,82 @@ export async function processPayments(): Promise<void> {
     const treasuryAta = getAssociatedTokenAddressSync(USDC_MINT, treasuryVault, true);
 
     const ataInfos = await connection.getMultipleAccountsInfo([subscriberAta, merchantAta, treasuryAta]);
-    const ataLabels = ["subscriber", "merchant", "treasury"];
-    const missingAtas = ataLabels.filter((_, i) => !ataInfos[i]);
-    if (missingAtas.length > 0) {
+
+    // Subscriber must already have an ATA — they need one to subscribe.
+    if (!ataInfos[0]) {
       logger.warn(
-        { pda: sub.subscriptionPda, missing: missingAtas },
-        "Token account(s) not initialized, skipping payment",
+        { pda: sub.subscriptionPda },
+        "Subscriber token account missing, skipping (forceCancel will handle)",
       );
       continue;
     }
 
+    // Auto-create merchant and treasury ATAs if missing (keeper pays rent).
+    const preIxs: TransactionInstruction[] = [];
+    if (!ataInfos[1]) {
+      logger.info({ pda: sub.subscriptionPda, merchant: onchain.merchant.toBase58() }, "Creating merchant ATA");
+      preIxs.push(
+        createAssociatedTokenAccountIdempotentInstruction(keeper, merchantAta, onchain.merchant, USDC_MINT),
+      );
+    }
+    if (!ataInfos[2]) {
+      logger.info({ pda: sub.subscriptionPda, treasury: treasuryVault.toBase58() }, "Creating treasury vault ATA");
+      preIxs.push(
+        createAssociatedTokenAccountIdempotentInstruction(keeper, treasuryAta, treasuryVault, USDC_MINT),
+      );
+    }
+
+    // Grace period: if subscription was created < 5s ago, defer first payment
+    // to allow RPC to propagate the delegation state.
+    const ageMs = Date.now() - sub.createdAt.getTime();
+    if (ageMs < 5_000) {
+      logger.debug({ pda: sub.subscriptionPda, ageMs }, "Subscription too fresh, deferring payment by 10s");
+      await prisma.subscription.update({
+        where: { id: sub.id },
+        data: { nextPaymentDue: new Date(Date.now() + 10_000) },
+      });
+      continue;
+    }
+
     // Pre-flight: verify delegation is valid (delegate = PDA, amount >= subscription amount)
-    try {
-      const subAccount = await getAccount(connection, subscriberAta);
-      if (!subAccount.delegate || !subAccount.delegate.equals(pda)) {
-        logger.warn(
-          { pda: sub.subscriptionPda, delegate: subAccount.delegate?.toBase58() ?? "NONE" },
-          "Delegation not set or wrong delegate, skipping payment (forceCancel will handle)",
-        );
-        continue;
+    // Retry with backoff to handle devnet RPC staleness.
+    const DELEGATION_RETRIES = 3;
+    const DELEGATION_DELAY_MS = 5_000;
+    let delegationOk = false;
+    for (let attempt = 0; attempt < DELEGATION_RETRIES; attempt++) {
+      try {
+        const subAccount = await getAccount(connection, subscriberAta);
+        if (subAccount.delegate && subAccount.delegate.equals(pda) && subAccount.delegatedAmount >= onchain.amount) {
+          delegationOk = true;
+          break;
+        }
+        if (attempt < DELEGATION_RETRIES - 1) {
+          logger.debug({ pda: sub.subscriptionPda, attempt }, "Delegation not visible yet, retrying in 5s");
+          await new Promise(r => setTimeout(r, DELEGATION_DELAY_MS));
+        }
+      } catch (err) {
+        if (attempt < DELEGATION_RETRIES - 1) {
+          await new Promise(r => setTimeout(r, DELEGATION_DELAY_MS));
+        } else {
+          logger.warn({ pda: sub.subscriptionPda, err }, "Failed to check delegation, skipping");
+        }
       }
-      if (subAccount.delegatedAmount < onchain.amount) {
+    }
+    if (!delegationOk) {
+      try {
+        const subAccount = await getAccount(connection, subscriberAta);
         logger.warn(
-          { pda: sub.subscriptionPda, delegated: subAccount.delegatedAmount.toString(), required: onchain.amount.toString() },
-          "Insufficient delegated amount, skipping payment (forceCancel will handle)",
+          { pda: sub.subscriptionPda, delegate: subAccount.delegate?.toBase58() ?? "NONE", delegated: subAccount.delegatedAmount.toString() },
+          "Delegation not set or insufficient after retry, skipping payment (forceCancel will handle)",
         );
-        continue;
+      } catch {
+        logger.warn({ pda: sub.subscriptionPda }, "Delegation check failed after retry, skipping");
       }
-    } catch (err) {
-      logger.warn({ pda: sub.subscriptionPda, err }, "Failed to check delegation, skipping");
       continue;
     }
 
     const ix = buildProcessPaymentIx(onchain, pda, keeper);
-    const tx = new Transaction().add(ix);
+    const tx = new Transaction().add(...preIxs, ix);
 
     try {
       const sig = await sendAndConfirmTransaction(
@@ -163,7 +210,23 @@ export async function processPayments(): Promise<void> {
         );
       }
     } catch (err) {
-      logger.error({ pda: sub.subscriptionPda, err }, "Payment tx failed");
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const isInsufficientFunds = errMsg.includes("insufficient funds") || errMsg.includes("0x1");
+
+      if (isInsufficientFunds) {
+        logger.warn(
+          { pda: sub.subscriptionPda },
+          "Subscriber has insufficient token balance — deferring next payment by 1 hour",
+        );
+        // Defer next attempt by 1 hour instead of retrying every 15s
+        await prisma.subscription.update({
+          where: { id: sub.id },
+          data: { nextPaymentDue: new Date(Date.now() + 3_600_000) },
+        });
+      } else {
+        logger.error({ pda: sub.subscriptionPda, err }, "Payment tx failed");
+      }
+
       const { gross, fee, net } = computeFee(onchain.amount);
       try {
         await reportPaymentFailed({

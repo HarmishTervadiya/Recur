@@ -9,6 +9,27 @@ const USDC_MINT = new PublicKey(env.USDC_MINT);
 
 const logger = createLogger("chainVerify");
 
+const MAX_RETRIES = 3;
+const RETRY_BASE_MS = 1000;
+
+/** Exponential backoff retry wrapper for RPC calls. */
+async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt < MAX_RETRIES - 1) {
+        const delay = RETRY_BASE_MS * 2 ** attempt;
+        logger.debug({ attempt, delay, label }, "RPC call failed, retrying");
+        await new Promise(r => setTimeout(r, delay));
+      } else {
+        throw err;
+      }
+    }
+  }
+  throw new Error("unreachable");
+}
+
 export interface OnChainSubscription {
   subscriber: PublicKey;
   merchant: PublicKey;
@@ -33,7 +54,10 @@ export async function fetchSubscription(
   pda: PublicKey,
 ): Promise<OnChainSubscription | null> {
   try {
-    const info = await connection.getAccountInfo(pda);
+    const info = await withRetry(
+      () => connection.getAccountInfo(pda),
+      `getAccountInfo(${pda.toBase58().slice(0, 8)})`,
+    );
     if (!info || !info.data || info.data.length < 8) return null;
     if (!info.owner.equals(PROGRAM_ID)) return null;
 
@@ -69,7 +93,10 @@ export async function verifyDelegation(
       USDC_MINT,
       subscriberWallet,
     );
-    const account = await getAccount(connection, ata);
+    const account = await withRetry(
+      () => getAccount(connection, ata),
+      `getAccount(${ata.toBase58().slice(0, 8)})`,
+    );
     return (
       account.delegate !== null &&
       account.delegate.equals(subscriptionPda) &&

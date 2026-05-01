@@ -19,7 +19,7 @@ import {
 import { findTreasuryVaultPda } from "../packages/solana-client/src/index";
 
 const RPC_URL    = "https://api.devnet.solana.com";
-const PROGRAM_ID = new PublicKey(process.env.PROGRAM_ID ?? "3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx");
+const PROGRAM_ID = new PublicKey(process.env.PROGRAM_ID ?? "5HFL1agQqg6wHeLEsLuJVKdLZbMzAC2rGRQkEWk8smLk");
 const USDC_MINT  = new PublicKey(process.env.USDC_MINT!);
 const conn       = new Connection(RPC_URL, "confirmed");
 

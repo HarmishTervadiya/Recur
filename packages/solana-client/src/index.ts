@@ -1,8 +1,8 @@
 import { PublicKey, Connection } from "@solana/web3.js";
 
 // Default program ID — can be overridden at runtime via env.
-const DEFAULT_PROGRAM_ID = "3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx";
-const DEFAULT_USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
+const DEFAULT_PROGRAM_ID = "5HFL1agQqg6wHeLEsLuJVKdLZbMzAC2rGRQkEWk8smLk";
+const DEFAULT_USDC_MINT = "4ynuJ6AbbtnriMcQmBWKVviBJNcPEMG8UBLM2LaB5xYb";
 
 export const PROGRAM_ID = new PublicKey(DEFAULT_PROGRAM_ID);
 export const USDC_MINT_DEVNET = new PublicKey(DEFAULT_USDC_MINT);

@@ -47,6 +47,11 @@ export async function signAndSend(
     );
     return signature;
   } catch (err) {
-    throw mapError(err, "Transaction failed");
+    const mapped = mapError(err, "Transaction failed");
+    // Preserve on-chain logs from SendTransactionError for debugging.
+    if (err && typeof err === "object" && "logs" in err) {
+      (mapped as unknown as { logs: unknown }).logs = (err as { logs: unknown }).logs;
+    }
+    throw mapped;
   }
 }

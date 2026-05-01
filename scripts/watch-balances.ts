@@ -14,7 +14,7 @@ import path from "path";
 
 const REFRESH_MS = 2000;
 const RPC_URL = "http://127.0.0.1:8899";
-const PROGRAM_ID = new PublicKey("3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx");
+const PROGRAM_ID = new PublicKey("5HFL1agQqg6wHeLEsLuJVKdLZbMzAC2rGRQkEWk8smLk");
 
 const conn = new Connection(RPC_URL, "confirmed");
 

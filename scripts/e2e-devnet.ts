@@ -54,7 +54,7 @@ import crypto from "crypto";
 const RPC_URL = "https://api.devnet.solana.com";
 const API_URL = process.env.API_URL ?? "http://localhost:3001";
 const KEEPER_SECRET = process.env.KEEPER_SECRET ?? "localnet-keeper-secret";
-const PROGRAM_ID = new PublicKey("3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx");
+const PROGRAM_ID = new PublicKey("5HFL1agQqg6wHeLEsLuJVKdLZbMzAC2rGRQkEWk8smLk");
 
 /** $5 USDC — above $1 minimum, covers platform fee ($0.05 flat + 0.25%). */
 const AMOUNT = 5_000_000;

@@ -10,10 +10,10 @@ const envSchema = z.object({
   SOLANA_RPC_URL: z.string().url().optional(),
   PROGRAM_ID: z
     .string()
-    .default("3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx"),
+    .default("5HFL1agQqg6wHeLEsLuJVKdLZbMzAC2rGRQkEWk8smLk"),
   /// USDC mint address. Override with a localnet mock mint when running
   /// against solana-test-validator. Defaults to the devnet USDC mint.
-  USDC_MINT: z.string().default("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"),
+  USDC_MINT: z.string().default("4ynuJ6AbbtnriMcQmBWKVviBJNcPEMG8UBLM2LaB5xYb"),
   DATABASE_URL: z.string().default("postgresql://localhost:5432/recur"),
   PORT: z.coerce.number().default(3001),
   JWT_SECRET: z.string().min(16, "JWT_SECRET must be at least 16 characters"),

@@ -47,6 +47,16 @@ export async function chainScan(): Promise<void> {
 
     for (const { pubkey, account } of accounts) {
       const pdaStr = pubkey.toBase58();
+
+      // Skip ghost accounts — closed PDAs with 0 lamports that devnet RPC
+      // still returns due to caching/lag.
+      if (account.lamports === 0) continue;
+
+      // Skip accounts owned by a different program (devnet RPC sometimes
+      // returns stale accounts from a previously-closed program at same address).
+      if (!account.owner.equals(PROGRAM_ID)) continue;
+
+      // Skip if already registered in DB (any status: active, cancelled, etc.)
       if (knownPdas.has(pdaStr)) continue;
 
       // Parse minimal fields from the account data

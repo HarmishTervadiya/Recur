@@ -305,10 +305,28 @@ router.post(
     const plan = await prisma.plan.findUnique({ where: { id: body.planId } });
     if (!plan) throw new AppError(ErrorCode.PLAN_NOT_FOUND, "Plan not found");
 
+    // One active subscription per wallet per app
+    const existing = await prisma.subscription.findFirst({
+      where: {
+        subscriberId: subscriber.id,
+        plan: { appId: plan.appId },
+        status: "active",
+        subscriptionPda: { not: body.subscriptionPda },
+      },
+    });
+    if (existing) {
+      logger.warn(
+        { existing: existing.subscriptionPda, new: body.subscriptionPda },
+        "Duplicate subscription for same wallet+app, skipping registration",
+      );
+      ok(res, { id: existing.id, skipped: true }, 200);
+      return;
+    }
+
     const confirmedDate = new Date(body.confirmedAt);
-    const nextPaymentDue = new Date(
-      confirmedDate.getTime() + plan.intervalSeconds * 1000,
-    );
+    // First payment is immediately collectible on-chain (last_payment_timestamp = now - interval),
+    // so set nextPaymentDue to confirmedDate to let the keeper process it right away.
+    const nextPaymentDue = confirmedDate;
 
     const subscription = await prisma.subscription.upsert({
       where: { subscriptionPda: body.subscriptionPda },

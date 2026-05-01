@@ -159,8 +159,9 @@ export class RecurClient {
       subscriberWallet,
     );
 
-    const cycles = options.delegationCycles ?? 12;
-    const delegationAmount = BigInt(options.amount) * BigInt(cycles);
+    const delegationAmount = options.delegationCycles
+      ? BigInt(options.amount) * BigInt(options.delegationCycles)
+      : BigInt("18446744073709551615"); // u64::MAX — revoked on cancel
 
     const approveIx = createApproveInstruction(
       subscriberAta,
@@ -227,8 +228,9 @@ export class RecurClient {
       subscriberWallet,
     );
 
-    const cycles = options.delegationCycles ?? 12;
-    const delegationAmount = BigInt(options.amount) * BigInt(cycles);
+    const delegationAmount = options.delegationCycles
+      ? BigInt(options.amount) * BigInt(options.delegationCycles)
+      : BigInt("18446744073709551615"); // u64::MAX — revoked on cancel
 
     const approveIx = createApproveInstruction(
       subscriberAta,
@@ -334,6 +336,7 @@ export class RecurClient {
       keys: [
         { pubkey: subscriptionPda, isSigner: false, isWritable: true },
         { pubkey: subscriberWallet, isSigner: true, isWritable: true },
+        { pubkey: subscriberWallet, isSigner: false, isWritable: true },
         { pubkey: merchantPubkey, isSigner: false, isWritable: false },
       ],
       data: ixData,

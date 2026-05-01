@@ -6,17 +6,17 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-recur = "3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx"
+recur = "5HFL1agQqg6wHeLEsLuJVKdLZbMzAC2rGRQkEWk8smLk"
 
 [programs.localnet]
-recur = "3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx"
+recur = "5HFL1agQqg6wHeLEsLuJVKdLZbMzAC2rGRQkEWk8smLk"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
 cluster = "Localnet"
-wallet = "/mnt/c/Users/Harpalsinh/.config/solana/id.json"
+wallet = "/mnt/c/Users/harmi/deploy-key.json"
 
 # ─── Devnet deploy instructions ──────────────────────────
 # 1. Fund your deploy keypair:

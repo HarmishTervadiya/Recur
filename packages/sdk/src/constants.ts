@@ -15,13 +15,13 @@ export interface ClusterDefaults {
 
 const DEVNET: ClusterDefaults = {
   rpcUrl: "https://api.devnet.solana.com",
-  programId: "3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx",
-  usdcMint: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+  programId: "5HFL1agQqg6wHeLEsLuJVKdLZbMzAC2rGRQkEWk8smLk",
+  usdcMint: "4ynuJ6AbbtnriMcQmBWKVviBJNcPEMG8UBLM2LaB5xYb",
 };
 
 const MAINNET: ClusterDefaults = {
   rpcUrl: "https://api.mainnet-beta.solana.com",
-  programId: "3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx",
+  programId: "5HFL1agQqg6wHeLEsLuJVKdLZbMzAC2rGRQkEWk8smLk",
   usdcMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
 };
 

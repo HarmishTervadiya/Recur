@@ -84,20 +84,25 @@ export function mapError(err: unknown, fallbackMessage = "Unknown error"): Recur
   if (err instanceof RecurError) return err;
 
   const msg = errorMessage(err).toLowerCase();
+  // Also check program logs for more specific error messages
+  const logs = (err && typeof err === "object" && "logs" in err)
+    ? ((err as { logs: unknown }).logs as string[] ?? []).join(" ").toLowerCase()
+    : "";
+  const combined = `${msg} ${logs}`;
 
   if (msg.includes("user rejected") || msg.includes("user denied")) {
     return new WalletRejectedError(err);
   }
-  if (msg.includes("insufficient") && (msg.includes("fund") || msg.includes("lamport"))) {
+  if (combined.includes("insufficient") && (combined.includes("fund") || combined.includes("lamport") || combined.includes("balance"))) {
     return new InsufficientFundsError(undefined, undefined, err);
   }
-  if (msg.includes("delegated amount") || msg.includes("delegation")) {
+  if (combined.includes("delegated amount") || combined.includes("delegation revoked")) {
     return new DelegationExhaustedError(err);
   }
-  if (msg.includes("plan_inactive") || msg.includes("plan inactive")) {
+  if (combined.includes("plan_inactive") || combined.includes("plan inactive")) {
     return new PlanInactiveError("unknown", err);
   }
-  if (msg.includes("subscription_exists") || msg.includes("already exists")) {
+  if (combined.includes("subscription_exists") || combined.includes("already exists") || combined.includes("already in use")) {
     return new SubscriptionAlreadyExistsError(err);
   }
   if (msg.includes("network") || msg.includes("fetch failed")) {

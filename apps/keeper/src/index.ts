@@ -4,8 +4,12 @@ import { processPayments } from "./jobs/processPayments.js";
 import { finalizeCancel } from "./jobs/finalizeCancel.js";
 import { forceCancel } from "./jobs/forceCancel.js";
 import { chainScan } from "./jobs/chainScan.js";
+import { validateConfig } from "./lib/validateConfig.js";
 
 const logger = createLogger("keeper");
+
+// Boot-time validation: verify USDC_MINT, RPC connectivity, keeper balance
+await validateConfig();
 
 let paymentRunning = false;
 let cancelRunning = false;

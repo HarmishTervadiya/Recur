@@ -7,7 +7,7 @@ import { Connection, PublicKey } from "@solana/web3.js";
 
 const p = new PrismaClient();
 const conn = new Connection("https://api.devnet.solana.com", "confirmed");
-const PROGRAM_ID = new PublicKey("3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx");
+const PROGRAM_ID = new PublicKey("5HFL1agQqg6wHeLEsLuJVKdLZbMzAC2rGRQkEWk8smLk");
 
 // Subscriptions that had on-chain payments but keeper never reported
 const TARGET_PDAS = [

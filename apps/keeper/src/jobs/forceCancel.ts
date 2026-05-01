@@ -21,6 +21,15 @@ const BATCH_SIZE = parseInt(process.env["KEEPER_BATCH_SIZE"] ?? "100", 10);
 const pdaNotFoundCounts = new Map<string, number>();
 const PDA_GONE_THRESHOLD = 5;
 
+/**
+ * Track consecutive delegation-invalid counts per subscription.
+ * Only force-cancel after confirmed invalid across multiple forceCancel runs.
+ * This prevents race conditions where the RPC returns stale data for a
+ * just-created subscription.
+ */
+const delegationInvalidCounts = new Map<string, number>();
+const DELEGATION_INVALID_THRESHOLD = 3;
+
 export async function forceCancel(): Promise<void> {
   const subs = await prisma.subscription.findMany({
     where: { status: "active" },
@@ -73,14 +82,44 @@ export async function forceCancel(): Promise<void> {
     // PDA exists — reset not-found counter
     pdaNotFoundCounts.delete(sub.subscriptionPda);
 
+    // Grace period: don't force-cancel subscriptions created within the last
+    // 2 billing intervals. This prevents race conditions where the RPC returns
+    // stale delegation data for a just-created subscription.
+    const nowSec = BigInt(Math.floor(Date.now() / 1000));
+    const gracePeriod = onchain.interval * 2n;
+    if (nowSec - onchain.createdAt < gracePeriod) {
+      logger.debug(
+        { pda: sub.subscriptionPda },
+        "Subscription still in grace period, skipping delegation check",
+      );
+      continue;
+    }
+
     const delegationValid = await verifyDelegation(
       onchain.subscriber,
       pda,
       onchain.amount,
     );
 
-    if (delegationValid) continue;
+    if (delegationValid) {
+      delegationInvalidCounts.delete(sub.subscriptionPda);
+      continue;
+    }
 
+    // Require multiple consecutive failures before force-cancelling
+    const invalidCount = (delegationInvalidCounts.get(sub.subscriptionPda) ?? 0) + 1;
+    delegationInvalidCounts.set(sub.subscriptionPda, invalidCount);
+
+    if (invalidCount < DELEGATION_INVALID_THRESHOLD) {
+      logger.warn(
+        { pda: sub.subscriptionPda, invalidCount, threshold: DELEGATION_INVALID_THRESHOLD },
+        "Delegation invalid, waiting for confirmation before force cancel",
+      );
+      continue;
+    }
+
+    // Confirmed invalid after N checks
+    delegationInvalidCounts.delete(sub.subscriptionPda);
     logger.info(
       { pda: sub.subscriptionPda },
       "Delegation revoked or insufficient, force cancelling",

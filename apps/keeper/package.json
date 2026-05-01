@@ -18,7 +18,8 @@
     "@solana/spl-token": "^0.4.6",
     "@solana/web3.js": "^1.91.0",
     "bs58": "^5.0.0",
-    "node-cron": "^3.0.3"
+    "node-cron": "^3.0.3",
+    "pino-pretty": "^11.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.12.0",

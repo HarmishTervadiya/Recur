@@ -129,6 +129,22 @@ router.post(
     if (!plan.isActive)
       throw new AppError(ErrorCode.PLAN_INACTIVE, "Plan is not active");
 
+    // One active subscription per wallet per app
+    const existing = await prisma.subscription.findFirst({
+      where: {
+        subscriberId: subscriber.id,
+        plan: { appId },
+        status: "active",
+        subscriptionPda: { not: subscriptionPda },
+      },
+    });
+    if (existing) {
+      throw new AppError(
+        ErrorCode.SUBSCRIPTION_ALREADY_EXISTS,
+        "Active subscription already exists for this app. Cancel existing subscription first.",
+      );
+    }
+
     // Compute first payment due date
     const nextPaymentDue = new Date(
       Date.now() + plan.intervalSeconds * 1000,

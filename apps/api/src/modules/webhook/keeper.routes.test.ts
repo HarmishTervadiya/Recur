@@ -93,7 +93,11 @@ describe("keeper routes", () => {
 
   describe("POST /keeper/payment-failed", () => {
     it("records a failed payment", async () => {
-      prismaMock.subscription.findUnique.mockResolvedValue(SUB_RECORD as any);
+      prismaMock.subscription.findUnique.mockResolvedValue({
+        ...SUB_RECORD,
+        plan: { id: "plan1", appId: "app1", intervalSeconds: 2592000 },
+      } as any);
+      prismaMock.globalConfig.findUnique.mockResolvedValue(null);
       prismaMock.subscription.update.mockResolvedValue({ ...SUB_RECORD, status: "past_due" } as any);
       prismaMock.subscriptionEvent.create.mockResolvedValue({} as any);
       prismaMock.merchantTransaction.upsert.mockResolvedValue({
@@ -125,7 +129,11 @@ describe("keeper routes", () => {
 
   describe("POST /keeper/cancel", () => {
     it("records a cancel request", async () => {
-      prismaMock.subscription.findUnique.mockResolvedValue(SUB_RECORD as any);
+      prismaMock.subscription.findUnique.mockResolvedValue({
+        ...SUB_RECORD,
+        plan: { id: "plan1", appId: "app1", intervalSeconds: 2592000 },
+      } as any);
+      prismaMock.globalConfig.findUnique.mockResolvedValue(null);
       prismaMock.subscription.update.mockResolvedValue(SUB_RECORD as any);
       prismaMock.subscriptionEvent.create.mockResolvedValue({} as any);
 
@@ -143,7 +151,11 @@ describe("keeper routes", () => {
     });
 
     it("records a force cancel", async () => {
-      prismaMock.subscription.findUnique.mockResolvedValue(SUB_RECORD as any);
+      prismaMock.subscription.findUnique.mockResolvedValue({
+        ...SUB_RECORD,
+        plan: { id: "plan1", appId: "app1", intervalSeconds: 2592000 },
+      } as any);
+      prismaMock.globalConfig.findUnique.mockResolvedValue(null);
       prismaMock.subscriptionEvent.create.mockResolvedValue({} as any);
       prismaMock.subscription.update.mockResolvedValue({
         ...SUB_RECORD,

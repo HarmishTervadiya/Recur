@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiClient } from "../../../../../lib/api-client";
+import { useTier } from "../../../../../lib/use-tier";
 import { formatAmount, truncateWallet, type Transaction } from "./utils";
 
 interface TransactionsTabProps {
@@ -45,9 +46,12 @@ export function TransactionsTab({ appId }: TransactionsTabProps) {
       aria-labelledby="tab-transactions"
       className="motion-safe:animate-fade-in"
     >
-      <h2 className="text-[15px] font-bold text-recur-text-heading mb-4">
-        Transactions
-      </h2>
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+        <h2 className="text-[15px] font-bold text-recur-text-heading">
+          Transactions
+        </h2>
+        <ExportButtons />
+      </div>
 
       {loading && transactions.length === 0 ? (
         <div
@@ -183,5 +187,155 @@ export function TransactionsTab({ appId }: TransactionsTabProps) {
         </>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Export Buttons
+// ---------------------------------------------------------------------------
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
+function ExportButtons() {
+  const { isPro } = useTier();
+
+  const handleExport = useCallback(
+    (type: "transactions" | "subscriptions" | "subscribers", fullHistory = false) => {
+      const token = typeof window !== "undefined"
+        ? localStorage.getItem("recur_access_token")
+        : null;
+
+      const params = new URLSearchParams();
+      if (!fullHistory) {
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        params.set("since", thirtyDaysAgo.toISOString());
+      }
+
+      const url = `${API_BASE_URL}/merchant/exports/${type}.csv?${params.toString()}`;
+
+      // Open in new tab with auth header via fetch + blob download
+      fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+          return res.blob();
+        })
+        .then((blob) => {
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = `recur-${type}-${new Date().toISOString().slice(0, 10)}.csv`;
+          a.click();
+          URL.revokeObjectURL(a.href);
+        })
+        .catch(() => {
+          // Silently fail — user will see empty download or network error
+        });
+    },
+    [],
+  );
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <button
+        onClick={() => handleExport("transactions", false)}
+        className="btn-secondary text-[11px] px-3 py-1.5"
+        title="Export last 30 days of transactions"
+      >
+        <DownloadIcon />
+        Last 30 Days
+      </button>
+
+      {isPro ? (
+        <>
+          <button
+            onClick={() => handleExport("transactions", true)}
+            className="btn-secondary text-[11px] px-3 py-1.5"
+            title="Export full transaction history"
+          >
+            <DownloadIcon />
+            Full History
+          </button>
+          <button
+            onClick={() => handleExport("subscriptions", true)}
+            className="btn-secondary text-[11px] px-3 py-1.5"
+            title="Export all subscriptions"
+          >
+            <DownloadIcon />
+            Subscriptions
+          </button>
+          <button
+            onClick={() => handleExport("subscribers", true)}
+            className="btn-secondary text-[11px] px-3 py-1.5"
+            title="Export all subscribers"
+          >
+            <DownloadIcon />
+            Subscribers
+          </button>
+        </>
+      ) : (
+        <span
+          className="text-[10px] text-recur-text-dim flex items-center gap-1"
+          title="Upgrade to Pro for full export history"
+        >
+          <LockMiniIcon />
+          <a
+            href="/dashboard/settings#recur-pro"
+            className="text-recur-primary hover:underline"
+          >
+            Pro: Full History
+          </a>
+        </span>
+      )}
+    </div>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      fill="none"
+      className="inline mr-1"
+      aria-hidden="true"
+    >
+      <path
+        d="M6 1v7M3 6l3 3 3-3M2 10h8"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function LockMiniIcon() {
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <rect
+        x="3"
+        y="7"
+        width="10"
+        height="8"
+        rx="1.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M5 7V5a3 3 0 016 0v2"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }

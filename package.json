@@ -19,7 +19,8 @@
     "seed:localnet": "bun run --filter=@recur/keeper seed:localnet",
     "demo:seed": "bun run scripts/demo-seed.ts",
     "demo:show": "bun run scripts/demo-show.ts",
-    "demo:watch": "bun run scripts/watch-balances.ts"
+    "demo:watch": "bun run scripts/watch-balances.ts",
+    "seed:platform": "bun run scripts/seed-platform-merchant.ts"
   },
   "devDependencies": {
     "@solana/spl-token": "^0.4.14",

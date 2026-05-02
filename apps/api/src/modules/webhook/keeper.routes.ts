@@ -33,6 +33,192 @@ function verifyKeeperSecret(
 router.use(verifyKeeperSecret);
 
 // ---------------------------------------------------------------------------
+// Helper: detect if a subscription belongs to the Recur Platform app
+// and update merchant tier accordingly.
+// ---------------------------------------------------------------------------
+
+async function getPlatformAppId(): Promise<string | null> {
+  const config = await prisma.globalConfig.findUnique({
+    where: { key: "platform.appId" },
+  });
+  return config?.value ?? null;
+}
+
+async function handlePlatformPaymentSuccess(
+  subscription: { id: string; plan: { appId: string } },
+  confirmedAt: string,
+): Promise<void> {
+  const platformAppId = await getPlatformAppId();
+  if (!platformAppId || subscription.plan.appId !== platformAppId) return;
+
+  // Find the subscriber wallet for this subscription
+  const sub = await prisma.subscription.findUnique({
+    where: { id: subscription.id },
+    include: { subscriber: true, plan: true },
+  });
+  if (!sub) return;
+
+  // The subscriber wallet IS the merchant wallet
+  const merchant = await prisma.merchant.findUnique({
+    where: { walletAddress: sub.subscriber.walletAddress },
+  });
+  if (!merchant) return;
+
+  const confirmedDate = new Date(confirmedAt);
+  const periodEnd = new Date(
+    confirmedDate.getTime() + sub.plan.intervalSeconds * 1000,
+  );
+
+  // Update merchant tier
+  await prisma.merchant.update({
+    where: { id: merchant.id },
+    data: {
+      tier: "pro",
+      subscriptionStatus: "active",
+      gracePeriodExpiresAt: null,
+    },
+  });
+
+  // Update PlatformSubscription if it exists
+  if (merchant.platformSubscriptionId) {
+    await prisma.platformSubscription.update({
+      where: { id: merchant.platformSubscriptionId },
+      data: {
+        status: "active",
+        currentPeriodEnd: periodEnd,
+      },
+    });
+  }
+
+  // Write platform event
+  await prisma.subscriptionEvent.create({
+    data: {
+      subscriptionId: sub.id,
+      eventType: "platform_pro_activated",
+      metadata: {
+        merchantId: merchant.id,
+        confirmedAt,
+      },
+    },
+  });
+
+  logger.info(
+    { merchantId: merchant.id, wallet: merchant.walletAddress },
+    "Platform Pro activated via payment",
+  );
+}
+
+async function handlePlatformPaymentFailed(
+  subscription: { id: string; plan: { appId: string } },
+): Promise<void> {
+  const platformAppId = await getPlatformAppId();
+  if (!platformAppId || subscription.plan.appId !== platformAppId) return;
+
+  const sub = await prisma.subscription.findUnique({
+    where: { id: subscription.id },
+    include: { subscriber: true },
+  });
+  if (!sub) return;
+
+  const merchant = await prisma.merchant.findUnique({
+    where: { walletAddress: sub.subscriber.walletAddress },
+  });
+  if (!merchant) return;
+
+  const graceDays = env.RECUR_PRO_GRACE_DAYS;
+  const gracePeriodExpiresAt = new Date(
+    Date.now() + graceDays * 24 * 60 * 60 * 1000,
+  );
+
+  // Keep tier as pro during grace period, but mark as past_due
+  await prisma.merchant.update({
+    where: { id: merchant.id },
+    data: {
+      subscriptionStatus: "past_due",
+      gracePeriodExpiresAt,
+    },
+  });
+
+  if (merchant.platformSubscriptionId) {
+    await prisma.platformSubscription.update({
+      where: { id: merchant.platformSubscriptionId },
+      data: { status: "past_due" },
+    });
+  }
+
+  await prisma.subscriptionEvent.create({
+    data: {
+      subscriptionId: sub.id,
+      eventType: "platform_pro_past_due",
+      metadata: {
+        merchantId: merchant.id,
+        gracePeriodExpiresAt: gracePeriodExpiresAt.toISOString(),
+        graceDays,
+      },
+    },
+  });
+
+  logger.warn(
+    {
+      merchantId: merchant.id,
+      wallet: merchant.walletAddress,
+      gracePeriodExpiresAt,
+    },
+    "Platform Pro payment failed — grace period started",
+  );
+}
+
+async function handlePlatformCancelFinalized(
+  subscription: { id: string; plan: { appId: string } },
+): Promise<void> {
+  const platformAppId = await getPlatformAppId();
+  if (!platformAppId || subscription.plan.appId !== platformAppId) return;
+
+  const sub = await prisma.subscription.findUnique({
+    where: { id: subscription.id },
+    include: { subscriber: true },
+  });
+  if (!sub) return;
+
+  const merchant = await prisma.merchant.findUnique({
+    where: { walletAddress: sub.subscriber.walletAddress },
+  });
+  if (!merchant) return;
+
+  await prisma.merchant.update({
+    where: { id: merchant.id },
+    data: {
+      tier: "free",
+      subscriptionStatus: "cancelled",
+      gracePeriodExpiresAt: null,
+    },
+  });
+
+  if (merchant.platformSubscriptionId) {
+    await prisma.platformSubscription.update({
+      where: { id: merchant.platformSubscriptionId },
+      data: { status: "cancelled" },
+    });
+  }
+
+  await prisma.subscriptionEvent.create({
+    data: {
+      subscriptionId: sub.id,
+      eventType: "platform_pro_downgraded",
+      metadata: {
+        merchantId: merchant.id,
+        reason: "cancel_finalized",
+      },
+    },
+  });
+
+  logger.info(
+    { merchantId: merchant.id, wallet: merchant.walletAddress },
+    "Platform Pro downgraded — cancel finalized",
+  );
+}
+
+// ---------------------------------------------------------------------------
 // POST /keeper/payment — successful payment
 // ---------------------------------------------------------------------------
 
@@ -118,6 +304,11 @@ router.post(
       "Payment recorded",
     );
 
+    // Check if this is a platform subscription and update merchant tier
+    void handlePlatformPaymentSuccess(subscription, body.confirmedAt).catch(
+      (err) => logger.error({ err }, "Platform tier update failed for payment_success"),
+    );
+
     void dispatchWebhook(subscription.plan.appId, "payment_success", {
       subscriptionId: subscription.id,
       subscriptionPda: body.subscriptionPda,
@@ -195,6 +386,11 @@ router.post(
 
     logger.warn({ pda: body.subscriptionPda, tx: body.txSignature }, "Payment FAILED recorded");
 
+    // Check if this is a platform subscription and start grace period
+    void handlePlatformPaymentFailed(subscription).catch(
+      (err) => logger.error({ err }, "Platform tier update failed for payment_failed"),
+    );
+
     void dispatchWebhook(subscription.plan.appId, "payment_failed", {
       subscriptionId: subscription.id,
       subscriptionPda: body.subscriptionPda,
@@ -268,6 +464,13 @@ router.post(
       { pda: body.subscriptionPda, type: body.cancelType, status: isFinalized ? "cancelled" : "active" },
       "Cancel event recorded",
     );
+
+    // Check if this is a platform subscription and downgrade merchant
+    if (isFinalized) {
+      void handlePlatformCancelFinalized(subscription).catch(
+        (err) => logger.error({ err }, "Platform tier update failed for cancel_finalized"),
+      );
+    }
 
     void dispatchWebhook(subscription.plan.appId, eventTypeMap[body.cancelType], {
       subscriptionId: subscription.id,

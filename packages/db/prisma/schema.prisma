@@ -18,6 +18,11 @@ enum SubscriptionStatus {
   expired
 }
 
+enum MerchantTier {
+  free
+  pro
+}
+
 enum MerchantTransactionStatus {
   success
   failed
@@ -31,6 +36,9 @@ enum EventType {
   cancel_finalized
   cancel_forced
   delegation_revoked
+  platform_pro_activated
+  platform_pro_past_due
+  platform_pro_downgraded
 }
 
 enum WebhookDeliveryStatus {
@@ -94,6 +102,11 @@ model Merchant {
   businessName  String?  @map("business_name")
   businessUrl   String?  @map("business_url")
   logoUrl       String?  @map("logo_url")
+  tier                    MerchantTier          @default(free) @map("tier")
+  subscriptionStatus      SubscriptionStatus?   @map("subscription_status")
+  gracePeriodExpiresAt    DateTime?             @map("grace_period_expires_at")
+  platformSubscriptionId  String?               @unique @map("platform_subscription_id")
+  platformSubscription    PlatformSubscription? @relation(fields: [platformSubscriptionId], references: [id])
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
@@ -379,12 +392,17 @@ model PlatformSubscription {
   status             SubscriptionStatus @default(active)
   currentPeriodStart DateTime           @map("current_period_start")
   currentPeriodEnd   DateTime           @map("current_period_end")
+  subscriptionPda  String    @unique @map("subscription_pda")
+  nextPaymentDue   DateTime  @map("next_payment_due")
+  delegationCycles Int       @default(12) @map("delegation_cycles")
   createdAt          DateTime           @default(now()) @map("created_at")
   updatedAt          DateTime           @updatedAt @map("updated_at")
 
   platformPlan PlatformPlan          @relation(fields: [platformPlanId], references: [id])
   transactions PlatformTransaction[]
+  merchant     Merchant?
 
+  @@unique([merchantId])
   @@index([merchantId])
   @@index([platformPlanId])
   @@map("platform_subscriptions")

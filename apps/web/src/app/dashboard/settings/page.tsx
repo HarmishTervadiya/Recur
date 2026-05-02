@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { apiClient, parseFieldErrors } from "../../../lib/api-client";
 import { useToast } from "../../../components/ui/ToastProvider";
 import { Modal } from "../../../components/ui/Modal";
+import { useTier } from "../../../lib/use-tier";
 
 interface MerchantProfile {
   id: string;
@@ -252,9 +253,267 @@ export default function SettingsPage() {
           className="motion-safe:animate-pulse bg-recur-border rounded-[14px] h-[300px]"
           aria-hidden="true"
         />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Pro Subscription Section
+// ---------------------------------------------------------------------------
+
+const PRO_FEATURES = [
+  "CSV exports — transactions, subscriptions, subscribers",
+  "Full history access (free tier limited to 30 days)",
+  "Advanced analytics (coming soon)",
+  "Priority support",
+];
+
+function ProSubscriptionSection() {
+  const {
+    tier,
+    subscriptionStatus,
+    gracePeriodExpiresAt,
+    subscription,
+    isPro,
+    isLoading,
+    refresh,
+  } = useTier();
+  const { toast } = useToast();
+  const [subscribing, setSubscribing] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const cancelBtnRef = useRef<HTMLButtonElement>(null);
+
+  const handleSubscribe = useCallback(async () => {
+    setSubscribing(true);
+    try {
+      const res = await apiClient<{
+        planId: string;
+        planSeed: string;
+        amountBaseUnits: string;
+        intervalSeconds: number;
+        merchantWallet: string;
+        planName: string;
+      }>("/merchant/me/pro/subscribe", {
+        method: "POST",
+        body: JSON.stringify({ planType: "monthly" }),
+      });
+
+      if (!res.success || !res.data) {
+        toast("error", res.error?.message ?? "Failed to start subscription");
+        return;
+      }
+
+      // TODO: In Phase 2.3, this will use wallet adapter to sign the on-chain
+      // subscribe transaction. For now, show the plan info and a placeholder.
+      toast(
+        "info",
+        `Pro plan: ${res.data.planName} — $${(Number(res.data.amountBaseUnits) / 1_000_000).toFixed(2)}/mo. On-chain subscription flow coming soon.`,
+      );
+    } finally {
+      setSubscribing(false);
+    }
+  }, [toast]);
+
+  const handleCancelConfirm = useCallback(async () => {
+    setCancelling(true);
+    try {
+      const res = await apiClient<{
+        subscriptionPda: string;
+        currentPeriodEnd: string;
+      }>("/merchant/me/pro/cancel", { method: "POST" });
+
+      if (!res.success || !res.data) {
+        toast("error", res.error?.message ?? "Failed to cancel subscription");
+        return;
+      }
+
+      // TODO: In Phase 2.7, this will use wallet adapter to sign the on-chain
+      // request_cancel transaction.
+      toast(
+        "info",
+        `Cancellation initiated. Pro features remain active until ${new Date(res.data.currentPeriodEnd).toLocaleDateString()}.`,
+      );
+      setShowCancelModal(false);
+      refresh();
+    } finally {
+      setCancelling(false);
+    }
+  }, [toast, refresh]);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3" aria-busy="true">
+        <div className="motion-safe:animate-pulse bg-recur-border rounded-[10px] h-6 w-40" />
+        <div className="motion-safe:animate-pulse bg-recur-border rounded-[10px] h-20 w-full" />
       </div>
     );
   }
+
+  return (
+    <>
+      <h2
+        id="pro-heading"
+        className="text-[18px] font-bold text-recur-text-heading mb-1"
+      >
+        Recur Pro
+      </h2>
+      <p className="text-[13px] text-recur-text-muted mb-5">
+        Unlock advanced features with a Pro subscription.
+      </p>
+
+      {/* Active / Past-due state */}
+      {isPro && (
+        <div className="space-y-4">
+          {subscriptionStatus === "past_due" && gracePeriodExpiresAt && (
+            <div className="flex items-start gap-3 px-4 py-3 bg-recur-error/5 border border-recur-error/20 rounded-[10px]">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="none"
+                className="shrink-0 mt-0.5 text-recur-error"
+                aria-hidden="true"
+              >
+                <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M8 4.5v4M8 11v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+              <div>
+                <p className="text-[13px] font-semibold text-recur-error">
+                  Payment Past Due
+                </p>
+                <p className="text-[12px] text-recur-text-muted mt-0.5">
+                  Your Pro features will remain active until{" "}
+                  <strong>
+                    {gracePeriodExpiresAt.toLocaleDateString()}
+                  </strong>
+                  . Please ensure your wallet has sufficient USDC for the next charge.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 px-4 py-3 bg-recur-primary/5 border border-recur-primary/20 rounded-[10px]">
+            <div className="flex items-center justify-center w-8 h-8 rounded-[8px] bg-recur-primary/10">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="none"
+                className="text-recur-primary"
+                aria-hidden="true"
+              >
+                <path
+                  d="M4 8l3 3 5-6"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-recur-text-heading">
+                Pro Plan Active
+              </p>
+              {subscription && (
+                <p className="text-[11px] text-recur-text-muted mt-0.5">
+                  Next charge:{" "}
+                  {new Date(subscription.currentPeriodEnd).toLocaleDateString()}{" "}
+                  ($
+                  {(
+                    Number(subscription.platformPlan.priceBaseUnits) /
+                    1_000_000
+                  ).toFixed(2)}{" "}
+                  USDC)
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => setShowCancelModal(true)}
+              className="text-[11px] text-recur-text-dim hover:text-recur-error motion-safe:transition-colors px-3 py-1 shrink-0"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Free state */}
+      {!isPro && (
+        <div className="space-y-4">
+          <ul className="space-y-2">
+            {PRO_FEATURES.map((feature) => (
+              <li key={feature} className="flex items-start gap-2">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  className="shrink-0 mt-0.5 text-recur-primary"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M3 7l3 3 5-6"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <span className="text-[13px] text-recur-text-muted">
+                  {feature}
+                </span>
+              </li>
+            ))}
+          </ul>
+
+          <button
+            onClick={handleSubscribe}
+            disabled={subscribing}
+            className="btn-primary text-[13px] px-5 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {subscribing ? "Processing…" : "Upgrade to Pro — $49/mo USDC"}
+          </button>
+
+          {tier === "free" && subscriptionStatus === "cancelled" && (
+            <p className="text-[11px] text-recur-text-dim">
+              Your Pro subscription was cancelled. Upgrade again to restore Pro
+              features.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Cancel confirmation modal */}
+      <Modal
+        open={showCancelModal}
+        onClose={() => !cancelling && setShowCancelModal(false)}
+        title="Cancel Pro Subscription?"
+        initialFocusRef={cancelBtnRef}
+        description="Your Pro features will remain active until the end of your current billing period. After that, you'll be downgraded to the free tier."
+      >
+        <div className="flex gap-3 mt-2">
+          <button
+            ref={cancelBtnRef}
+            onClick={handleCancelConfirm}
+            disabled={cancelling}
+            className="btn-primary text-[13px] px-5 py-2 disabled:opacity-50 disabled:cursor-not-allowed bg-recur-error border-recur-error text-white hover:brightness-110"
+          >
+            {cancelling ? "Cancelling…" : "Confirm Cancel"}
+          </button>
+          <button
+            onClick={() => setShowCancelModal(false)}
+            disabled={cancelling}
+            className="btn-secondary text-[13px] px-5 py-2"
+          >
+            Keep Pro
+          </button>
+        </div>
+      </Modal>
+    </>
+  );
+}
 
   return (
     <div>
@@ -446,6 +705,16 @@ export default function SettingsPage() {
             ))}
           </ul>
         )}
+      </section>
+
+      {/* Recur Pro Section */}
+      <section
+        id="recur-pro"
+        aria-labelledby="pro-heading"
+        className="dark-card mb-8 motion-safe:animate-page-enter"
+        style={{ animationDelay: "120ms" }}
+      >
+        <ProSubscriptionSection />
       </section>
 
       <Modal

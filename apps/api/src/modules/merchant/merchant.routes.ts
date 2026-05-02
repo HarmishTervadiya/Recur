@@ -261,6 +261,9 @@ const CreateWebhookBody = z.object({
     "cancel_finalized",
     "cancel_forced",
     "delegation_revoked",
+    "platform_pro_activated",
+    "platform_pro_past_due",
+    "platform_pro_downgraded",
   ])).default([]),
 });
 

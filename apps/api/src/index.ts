@@ -10,6 +10,8 @@ import { createLogger } from "@recur/logger";
 
 import authRouter from "./modules/auth/auth.routes.js";
 import merchantRouter from "./modules/merchant/merchant.routes.js";
+import proRouter from "./modules/merchant/pro.routes.js";
+import exportsRouter from "./modules/merchant/exports.routes.js";
 import plansPublicRouter from "./modules/merchant/plans.public.routes.js";
 import subscriptionRouter from "./modules/subscription/subscription.routes.js";
 import keeperRouter from "./modules/webhook/keeper.routes.js";
@@ -36,6 +38,8 @@ app.get("/health", (_req, res) => {
 // Auth routes get stricter rate limiting
 app.use("/auth", authLimiter, authRouter);
 app.use("/merchant", merchantRouter);
+app.use("/merchant/me/pro", proRouter);
+app.use("/merchant/exports", exportsRouter);
 app.use("/plans", plansPublicRouter);
 app.use("/subscriber", subscriptionRouter);
 app.use("/keeper", keeperRouter);

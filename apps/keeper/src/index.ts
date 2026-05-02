@@ -4,6 +4,7 @@ import { processPayments } from "./jobs/processPayments.js";
 import { finalizeCancel } from "./jobs/finalizeCancel.js";
 import { forceCancel } from "./jobs/forceCancel.js";
 import { chainScan } from "./jobs/chainScan.js";
+import { expirePlatformGrace } from "./jobs/expirePlatformGrace.js";
 import { validateConfig } from "./lib/validateConfig.js";
 
 const logger = createLogger("keeper");
@@ -15,6 +16,7 @@ let paymentRunning = false;
 let cancelRunning = false;
 let forceRunning = false;
 let scanRunning = false;
+let graceRunning = false;
 
 const PAYMENT_INTERVAL_MS = parseInt(process.env["KEEPER_POLL_MS"] ?? "15000", 10);
 
@@ -68,7 +70,20 @@ cron.schedule("*/5 * * * *", async () => {
   }
 });
 
+// Grace period expiry — downgrade past-due Pro merchants every 6 hours
+cron.schedule("0 */6 * * *", async () => {
+  if (graceRunning) return;
+  graceRunning = true;
+  try {
+    await expirePlatformGrace();
+  } catch (err) {
+    logger.error({ err }, "expirePlatformGrace job crashed");
+  } finally {
+    graceRunning = false;
+  }
+});
+
 logger.info(
   { paymentPollMs: PAYMENT_INTERVAL_MS },
-  "Recur Keeper started — jobs registered (processPayments, finalizeCancel, forceCancel, chainScan)",
+  "Recur Keeper started — jobs registered (processPayments, finalizeCancel, forceCancel, chainScan, expirePlatformGrace)",
 );

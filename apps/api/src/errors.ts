@@ -26,6 +26,8 @@ export const ErrorCode = {
   API_KEY_NOT_FOUND: "API_KEY_NOT_FOUND",
 
   MISSING_APP_ID: "MISSING_APP_ID",
+
+  PRO_REQUIRED: "PRO_REQUIRED",
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -58,6 +60,8 @@ export const ERROR_HTTP_STATUS: Record<ErrorCode, number> = {
   API_KEY_NOT_FOUND: 404,
 
   MISSING_APP_ID: 400,
+
+  PRO_REQUIRED: 402,
 };
 
 export interface PaginationMeta {

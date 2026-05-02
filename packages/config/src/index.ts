@@ -31,6 +31,12 @@ const envSchema = z.object({
   API_URL: z.string().url().default("http://localhost:3001"),
   /// Batch size for keeper processing jobs.
   KEEPER_BATCH_SIZE: z.coerce.number().default(20),
+  /// Recur Platform wallet address (base58). The merchant wallet for Recur's own billing.
+  RECUR_PLATFORM_WALLET: z.string().optional(),
+  /// Grace period in days before a past-due Pro merchant gets downgraded.
+  RECUR_PRO_GRACE_DAYS: z.coerce.number().default(7),
+  /// Pro plan price in token base units (USDC 6 decimals: $49.00 = 49_000_000).
+  RECUR_PRO_PRICE_BASE_UNITS: z.coerce.number().default(49_000_000),
 });
 
 export type Env = z.infer<typeof envSchema> & { SOLANA_RPC_URL: string };

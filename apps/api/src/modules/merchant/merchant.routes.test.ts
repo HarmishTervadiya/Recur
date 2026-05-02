@@ -15,6 +15,10 @@ const MERCHANT = {
   businessName: null,
   businessUrl: null,
   logoUrl: null,
+  tier: "free" as const,
+  subscriptionStatus: null,
+  gracePeriodExpiresAt: null,
+  platformSubscriptionId: null,
   createdAt: NOW,
   updatedAt: NOW,
 };

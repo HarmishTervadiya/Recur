@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { RecurLogoIcon } from "../icons/RecurLogoIcon";
 import { useAuth } from "../providers/AuthProvider";
 import { ThemeToggle } from "../ui/ThemeToggle";
+import { TierBadge } from "./TierBadge";
 
 const NAV_ITEMS = [
   { label: "Overview", href: "/dashboard", icon: "grid" },
@@ -93,8 +94,11 @@ export function DashboardSidebar({ onNavigate }: DashboardSidebarProps) {
       <div className="px-3 py-4 border-t border-recur-border">
         {walletAddress && (
           <div className="px-3 mb-3">
-            <div className="text-[10px] text-recur-text-dim uppercase tracking-wider mb-1">
-              Wallet
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-[10px] text-recur-text-dim uppercase tracking-wider">
+                Wallet
+              </div>
+              <TierBadge />
             </div>
             <div className="text-[11px] font-mono text-recur-text-muted">
               {walletAddress.slice(0, 4)}...{walletAddress.slice(-4)}

@@ -23,3 +23,4 @@ test-ledger/
 *.log
 *.tsbuildinfo
 coverage/
+keys/

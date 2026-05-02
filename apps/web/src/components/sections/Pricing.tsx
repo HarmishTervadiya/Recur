@@ -9,7 +9,12 @@ const APP_ID = process.env.NEXT_PUBLIC_RECUR_APP_ID ?? "";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 const RPC_URL = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? "https://api.devnet.solana.com";
 
-const client = new RecurClient({ rpcUrl: RPC_URL, apiBaseUrl: API_URL });
+const client = new RecurClient({
+  rpcUrl: RPC_URL,
+  apiBaseUrl: API_URL,
+  usdcMint: process.env.NEXT_PUBLIC_USDC_MINT,
+  programId: process.env.NEXT_PUBLIC_PROGRAM_ID,
+});
 
 // Format USDC amount: base units (6 decimals) → "$X"
 function formatUsdc(baseUnits: string): string {

@@ -9,7 +9,7 @@
  * Requires DATABASE_URL in environment (loaded from .env).
  */
 
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "../packages/db/node_modules/@prisma/client";
 import crypto from "crypto";
 
 const prisma = new PrismaClient();

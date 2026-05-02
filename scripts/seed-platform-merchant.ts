@@ -10,17 +10,61 @@
  */
 
 import { PrismaClient } from "../packages/db/node_modules/@prisma/client";
+import { Keypair } from "@solana/web3.js";
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 
 const prisma = new PrismaClient();
 
-const PLATFORM_WALLET =
-  process.env["RECUR_PLATFORM_WALLET"] ?? "RecurPlatform1111111111111111111111111111111";
+/**
+ * Resolve the platform wallet address:
+ * 1. Use RECUR_PLATFORM_WALLET env var if set
+ * 2. Otherwise, generate a keypair and save to keys/platform-wallet.json
+ */
+function resolvePlatformWallet(): string {
+  const envWallet = process.env["RECUR_PLATFORM_WALLET"];
+  if (envWallet && envWallet.length >= 32) {
+    return envWallet;
+  }
+
+  const keyPath = path.resolve(__dirname, "../keys/platform-wallet.json");
+
+  // If keypair already exists, load it
+  if (fs.existsSync(keyPath)) {
+    const keyData = JSON.parse(fs.readFileSync(keyPath, "utf-8"));
+    const keypair = Keypair.fromSecretKey(new Uint8Array(keyData));
+    console.log(`  Using existing platform keypair: ${keypair.publicKey.toBase58()}`);
+    return keypair.publicKey.toBase58();
+  }
+
+  // Generate new keypair
+  const keypair = Keypair.generate();
+  fs.writeFileSync(keyPath, JSON.stringify(Array.from(keypair.secretKey)));
+  console.log(`  Generated new platform keypair: ${keypair.publicKey.toBase58()}`);
+  console.log(`  Saved to: ${keyPath}`);
+  return keypair.publicKey.toBase58();
+}
+
+const PLATFORM_WALLET = resolvePlatformWallet();
 
 async function main() {
   console.log("Seeding Recur Platform merchant...\n");
 
-  // 1. Merchant
+  // 1. Merchant — upsert by wallet address
+  // Also clean up any old invalid platform merchant
+  const oldMerchant = await prisma.merchant.findFirst({
+    where: { businessName: "Recur Protocol" },
+  });
+  if (oldMerchant && oldMerchant.walletAddress !== PLATFORM_WALLET) {
+    // Migrate old platform merchant to new wallet address
+    await prisma.merchant.update({
+      where: { id: oldMerchant.id },
+      data: { walletAddress: PLATFORM_WALLET },
+    });
+    console.log(`  Migrated platform merchant from ${oldMerchant.walletAddress} to ${PLATFORM_WALLET}`);
+  }
+
   const merchant = await prisma.merchant.upsert({
     where: { walletAddress: PLATFORM_WALLET },
     update: {},

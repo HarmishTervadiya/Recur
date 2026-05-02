@@ -325,7 +325,12 @@ function ProSubscriptionSection() {
       const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com";
       const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
-      const client = new RecurClient({ rpcUrl, apiBaseUrl });
+      const client = new RecurClient({
+        rpcUrl,
+        apiBaseUrl,
+        usdcMint: process.env.NEXT_PUBLIC_USDC_MINT,
+        programId: process.env.NEXT_PUBLIC_PROGRAM_ID,
+      });
       const { subscriptionPda, instructions } = client.buildSubscribeTransaction(
         publicKey,
         {
@@ -426,7 +431,12 @@ function ProSubscriptionSection() {
       const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com";
       const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
-      const client = new RecurClient({ rpcUrl, apiBaseUrl });
+      const client = new RecurClient({
+        rpcUrl,
+        apiBaseUrl,
+        usdcMint: process.env.NEXT_PUBLIC_USDC_MINT,
+        programId: process.env.NEXT_PUBLIC_PROGRAM_ID,
+      });
       const { instructions } = client.buildCancelTransaction(publicKey, {
         subscriptionPda,
         subscriberWallet,

@@ -1,3 +1,4 @@
+import "../polyfills";
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { WalletProvider } from "../components/providers/WalletProvider";

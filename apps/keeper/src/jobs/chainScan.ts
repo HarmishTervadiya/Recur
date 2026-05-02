@@ -64,7 +64,9 @@ export async function chainScan(): Promise<void> {
       const offset = 8; // skip discriminator
       const subscriber = new PublicKey(data.subarray(offset, offset + 32));
       const merchant = new PublicKey(data.subarray(offset + 32, offset + 64));
-      // plan_seed at offset+64..offset+72
+      // plan_seed at offset+64..offset+72 (8 bytes)
+      const planSeedBytes = data.subarray(offset + 64, offset + 72);
+      const planSeedHex = Buffer.from(planSeedBytes).toString("hex");
       // amount at offset+72
       const createdAt = data.readBigUInt64LE(offset + 96);
 
@@ -103,8 +105,9 @@ export async function chainScan(): Promise<void> {
         continue;
       }
 
-      // TODO: Match plan_seed from on-chain data to plan.planSeed for exact match
-      const matchedPlan = plans[0]; // fallback to first plan
+      // Match plan_seed from on-chain data to plan.planSeed for exact match
+      const matchedPlan =
+        plans.find((p) => p.planSeed === planSeedHex) ?? plans[0];
 
       await reportSubscriptionCreated({
         subscriptionPda: pdaStr,

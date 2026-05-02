@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useConnection } from "@solana/wallet-adapter-react";
+import { PublicKey, Transaction } from "@solana/web3.js";
+import { RecurClient } from "@recur/sdk";
 import { apiClient, parseFieldErrors } from "../../../lib/api-client";
 import { useToast } from "../../../components/ui/ToastProvider";
 import { Modal } from "../../../components/ui/Modal";
@@ -268,6 +272,8 @@ const PRO_FEATURES = [
   "Priority support",
 ];
 
+type PlanType = "monthly" | "annual";
+
 function ProSubscriptionSection() {
   const {
     tier,
@@ -279,14 +285,23 @@ function ProSubscriptionSection() {
     refresh,
   } = useTier();
   const { toast } = useToast();
+  const { publicKey, signTransaction } = useWallet();
+  const { connection } = useConnection();
   const [subscribing, setSubscribing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [planType, setPlanType] = useState<PlanType>("monthly");
   const cancelBtnRef = useRef<HTMLButtonElement>(null);
 
   const handleSubscribe = useCallback(async () => {
+    if (!publicKey || !signTransaction) {
+      toast("error", "Please connect your wallet first.");
+      return;
+    }
+
     setSubscribing(true);
     try {
+      // Step 1: Get plan details from API
       const res = await apiClient<{
         planId: string;
         planSeed: string;
@@ -296,7 +311,7 @@ function ProSubscriptionSection() {
         planName: string;
       }>("/merchant/me/pro/subscribe", {
         method: "POST",
-        body: JSON.stringify({ planType: "monthly" }),
+        body: JSON.stringify({ planType }),
       });
 
       if (!res.success || !res.data) {
@@ -304,23 +319,95 @@ function ProSubscriptionSection() {
         return;
       }
 
-      // TODO: In Phase 2.3, this will use wallet adapter to sign the on-chain
-      // subscribe transaction. For now, show the plan info and a placeholder.
-      toast(
-        "info",
-        `Pro plan: ${res.data.planName} — $${(Number(res.data.amountBaseUnits) / 1_000_000).toFixed(2)}/mo. On-chain subscription flow coming soon.`,
+      const { planId, planSeed, amountBaseUnits, intervalSeconds, merchantWallet } = res.data;
+
+      // Step 2: Build on-chain subscribe transaction using SDK
+      const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com";
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
+      const client = new RecurClient({ rpcUrl, apiBaseUrl });
+      const { subscriptionPda, instructions } = client.buildSubscribeTransaction(
+        publicKey,
+        {
+          planId,
+          planSeed,
+          amount: Number(amountBaseUnits),
+          intervalSeconds,
+          merchantWallet,
+          delegationCycles: 12,
+        },
       );
+
+      // Step 3: Sign and send transaction
+      toast("info", "Please approve the transaction in your wallet...");
+
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+      const tx = new Transaction({
+        feePayer: publicKey,
+        blockhash,
+        lastValidBlockHeight,
+      });
+      tx.add(...instructions);
+
+      const signed = await signTransaction(tx);
+      const signature = await connection.sendRawTransaction(signed.serialize(), {
+        skipPreflight: false,
+        preflightCommitment: "confirmed",
+      });
+
+      await connection.confirmTransaction(
+        { signature, blockhash, lastValidBlockHeight },
+        "confirmed",
+      );
+
+      // Step 4: Confirm with API to activate Pro tier
+      const confirmRes = await apiClient<{
+        id: string;
+        tier: string;
+        status: string;
+      }>("/merchant/me/pro/confirm", {
+        method: "POST",
+        body: JSON.stringify({
+          txSignature: signature,
+          subscriptionPda: subscriptionPda.toBase58(),
+          planId,
+        }),
+      });
+
+      if (!confirmRes.success) {
+        toast("error", confirmRes.error?.message ?? "Failed to confirm subscription");
+        return;
+      }
+
+      toast("success", "Pro subscription activated! Enjoy your new features.");
+      refresh();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Transaction failed";
+      if (message.includes("User rejected")) {
+        toast("error", "Transaction cancelled by user.");
+      } else {
+        toast("error", `Subscription failed: ${message}`);
+      }
     } finally {
       setSubscribing(false);
     }
-  }, [toast]);
+  }, [publicKey, signTransaction, connection, toast, planType, refresh]);
 
   const handleCancelConfirm = useCallback(async () => {
+    if (!publicKey || !signTransaction) {
+      toast("error", "Please connect your wallet first.");
+      return;
+    }
+
     setCancelling(true);
     try {
+      // Step 1: Get cancel data from API
       const res = await apiClient<{
         subscriptionPda: string;
         currentPeriodEnd: string;
+        subscriberWallet: string;
+        merchantWallet: string | null;
+        planSeed: string | null;
       }>("/merchant/me/pro/cancel", { method: "POST" });
 
       if (!res.success || !res.data) {
@@ -328,18 +415,79 @@ function ProSubscriptionSection() {
         return;
       }
 
-      // TODO: In Phase 2.7, this will use wallet adapter to sign the on-chain
-      // request_cancel transaction.
+      const { subscriptionPda, merchantWallet, planSeed, subscriberWallet } = res.data;
+
+      if (!merchantWallet || !planSeed) {
+        toast("error", "Missing subscription data for cancellation. Please contact support.");
+        return;
+      }
+
+      // Step 2: Build on-chain cancel transaction
+      const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com";
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
+      const client = new RecurClient({ rpcUrl, apiBaseUrl });
+      const { instructions } = client.buildCancelTransaction(publicKey, {
+        subscriptionPda,
+        subscriberWallet,
+        merchantWallet,
+        planSeed,
+      });
+
+      // Step 3: Sign and send
+      toast("info", "Please approve the cancellation in your wallet...");
+
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+      const tx = new Transaction({
+        feePayer: publicKey,
+        blockhash,
+        lastValidBlockHeight,
+      });
+      tx.add(...instructions);
+
+      const signed = await signTransaction(tx);
+      const signature = await connection.sendRawTransaction(signed.serialize(), {
+        skipPreflight: false,
+        preflightCommitment: "confirmed",
+      });
+
+      await connection.confirmTransaction(
+        { signature, blockhash, lastValidBlockHeight },
+        "confirmed",
+      );
+
+      // Step 4: Confirm cancellation with API
+      const confirmRes = await apiClient<{
+        tier: string;
+        subscriptionStatus: string;
+        currentPeriodEnd: string;
+      }>("/merchant/me/pro/cancel/confirm", {
+        method: "POST",
+        body: JSON.stringify({ txSignature: signature }),
+      });
+
+      if (!confirmRes.success) {
+        toast("error", confirmRes.error?.message ?? "Failed to confirm cancellation");
+        return;
+      }
+
       toast(
-        "info",
-        `Cancellation initiated. Pro features remain active until ${new Date(res.data.currentPeriodEnd).toLocaleDateString()}.`,
+        "success",
+        `Subscription cancelled. Pro features remain active until ${new Date(confirmRes.data!.currentPeriodEnd).toLocaleDateString()}.`,
       );
       setShowCancelModal(false);
       refresh();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Transaction failed";
+      if (message.includes("User rejected")) {
+        toast("error", "Cancellation cancelled by user.");
+      } else {
+        toast("error", `Cancellation failed: ${message}`);
+      }
     } finally {
       setCancelling(false);
     }
-  }, [toast, refresh]);
+  }, [publicKey, signTransaction, connection, toast, refresh]);
 
   if (isLoading) {
     return (
@@ -468,16 +616,49 @@ function ProSubscriptionSection() {
             ))}
           </ul>
 
+          {/* Plan type toggle */}
+          <div className="flex items-center gap-1 p-1 bg-recur-base rounded-[10px] w-fit">
+            <button
+              type="button"
+              onClick={() => setPlanType("monthly")}
+              className={`text-[12px] px-4 py-1.5 rounded-[8px] font-medium transition-colors ${
+                planType === "monthly"
+                  ? "bg-recur-primary text-white"
+                  : "text-recur-text-muted hover:text-recur-text-heading"
+              }`}
+            >
+              Monthly
+            </button>
+            <button
+              type="button"
+              onClick={() => setPlanType("annual")}
+              className={`text-[12px] px-4 py-1.5 rounded-[8px] font-medium transition-colors ${
+                planType === "annual"
+                  ? "bg-recur-primary text-white"
+                  : "text-recur-text-muted hover:text-recur-text-heading"
+              }`}
+            >
+              Annual
+              <span className="ml-1 text-[10px] opacity-80">Save 17%</span>
+            </button>
+          </div>
+
           <button
             onClick={handleSubscribe}
-            disabled={subscribing}
+            disabled={subscribing || !publicKey}
             className="btn-primary text-[13px] px-5 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {subscribing ? "Processing…" : "Upgrade to Pro — $49/mo USDC"}
+            {subscribing
+              ? "Processing…"
+              : !publicKey
+                ? "Connect Wallet to Upgrade"
+                : planType === "monthly"
+                  ? "Upgrade to Pro — $49/mo USDC"
+                  : "Upgrade to Pro — $490/yr USDC"}
           </button>
 
           {tier === "free" && subscriptionStatus === "cancelled" && (
-            <p className="text-[11px] text-recur-text-dim">
+            <p className="text-[11px] text-recur-text-muted">
               Your Pro subscription was cancelled. Upgrade again to restore Pro
               features.
             </p>
@@ -711,7 +892,7 @@ function ProSubscriptionSection() {
       <section
         id="recur-pro"
         aria-labelledby="pro-heading"
-        className="dark-card mb-8 motion-safe:animate-page-enter"
+        className="dark-card mt-10 mb-8 motion-safe:animate-page-enter"
         style={{ animationDelay: "120ms" }}
       >
         <ProSubscriptionSection />

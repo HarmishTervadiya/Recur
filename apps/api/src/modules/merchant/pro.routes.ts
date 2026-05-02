@@ -303,9 +303,102 @@ router.post(
       );
     }
 
-    // Return the subscription PDA so the frontend can build the cancel tx
+    // Return the subscription PDA + plan data so the frontend can build the cancel tx
+    // Also fetch the plan for PDA derivation context
+    const subscription = await prisma.subscription.findFirst({
+      where: { subscriptionPda: merchant.platformSubscription.subscriptionPda },
+      include: { plan: { include: { app: { include: { merchant: true } } } } },
+    });
+
     ok(res, {
       subscriptionPda: merchant.platformSubscription.subscriptionPda,
+      currentPeriodEnd: merchant.platformSubscription.currentPeriodEnd,
+      subscriberWallet: req.user!.walletAddress,
+      merchantWallet: subscription?.plan?.app?.merchant?.walletAddress ?? null,
+      planSeed: subscription?.plan?.planSeed ?? null,
+    });
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// POST /merchant/me/pro/cancel/confirm — confirm on-chain cancel, update tier
+// ---------------------------------------------------------------------------
+
+const CancelConfirmBody = z.object({
+  txSignature: z.string().min(32),
+});
+
+router.post(
+  "/cancel/confirm",
+  wrap(async (req, res) => {
+    const body = CancelConfirmBody.parse(req.body);
+
+    const merchant = await prisma.merchant.findUnique({
+      where: { walletAddress: req.user!.walletAddress },
+      include: { platformSubscription: true },
+    });
+
+    if (!merchant) {
+      throw new AppError(ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");
+    }
+
+    if (!merchant.platformSubscription) {
+      throw new AppError(
+        ErrorCode.NOT_FOUND,
+        "No active Pro subscription found",
+      );
+    }
+
+    // Mark the platform subscription as cancelled
+    await prisma.platformSubscription.update({
+      where: { id: merchant.platformSubscription.id },
+      data: { status: "cancelled" },
+    });
+
+    // Update merchant tier status — keep pro until period end
+    await prisma.merchant.update({
+      where: { id: merchant.id },
+      data: { subscriptionStatus: "cancelled" },
+    });
+
+    // Also update the regular Subscription row
+    if (merchant.platformSubscription.subscriptionPda) {
+      await prisma.subscription.updateMany({
+        where: {
+          subscriptionPda: merchant.platformSubscription.subscriptionPda,
+        },
+        data: {
+          status: "cancelled",
+          cancelRequestedAt: new Date(),
+        },
+      });
+    }
+
+    // Record a subscription event
+    await prisma.subscriptionEvent.create({
+      data: {
+        subscriptionId:
+          (
+            await prisma.subscription.findFirst({
+              where: {
+                subscriptionPda:
+                  merchant.platformSubscription.subscriptionPda ?? undefined,
+              },
+            })
+          )?.id ?? merchant.platformSubscription.id,
+        eventType: "platform_pro_downgraded",
+        txSignature: body.txSignature,
+      },
+    });
+
+    logger.info(
+      { merchantId: merchant.id, tx: body.txSignature },
+      "Pro subscription cancel confirmed",
+    );
+
+    ok(res, {
+      tier: "pro", // Still pro until period end
+      subscriptionStatus: "cancelled",
       currentPeriodEnd: merchant.platformSubscription.currentPeriodEnd,
     });
   }),

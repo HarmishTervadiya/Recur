@@ -206,10 +206,8 @@ function ExportButtons() {
         : null;
 
       const params = new URLSearchParams();
-      if (!fullHistory) {
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-        params.set("since", thirtyDaysAgo.toISOString());
-      }
+      // For free-tier 30-day export, omit `since` — the server defaults to 30 days
+      // via enforceDateRange(). Sending a client-computed value causes clock-skew 402s.
 
       const url = `${API_BASE_URL}/merchant/exports/${type}.csv?${params.toString()}`;
 

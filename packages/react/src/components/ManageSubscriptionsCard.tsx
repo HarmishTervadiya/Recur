@@ -22,6 +22,8 @@ export interface ManageSubscriptionsCardProps {
   cancelMode?: CancelMode;
   className?: string;
   style?: CSSProperties;
+  /** Filter subscriptions to a specific app. Recommended for multi-app wallets. */
+  appId?: string;
   /** Hide the embedded reapprove modal (merchant supplies their own). */
   disableReapproveModal?: boolean;
 }
@@ -30,10 +32,11 @@ export function ManageSubscriptionsCard({
   cancelMode = "request",
   className,
   style,
+  appId,
   disableReapproveModal,
 }: ManageSubscriptionsCardProps) {
   const { isAuthenticated } = useAuth();
-  const { data, isLoading, error, refetch } = useMySubscriptions();
+  const { data, isLoading, error, refetch } = useMySubscriptions({ appId, status: "active" });
   const { cancel, isLoading: isCancelling } = useCancelSubscription();
   const [reapproveSub, setReapproveSub] = useState<SubscriptionInfo | null>(null);
 

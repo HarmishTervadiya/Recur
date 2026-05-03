@@ -31,9 +31,11 @@ export function useSubscribe(): UseSubscribeResult {
 
   const action = useAsyncAction(async (args: SubscribeArgs): Promise<SubscriptionInfo> => {
     const wallet = getWallet();
+    console.log("[useSubscribe] Starting subscribe flow", { appId: args.appId, planId: args.planId, wallet: wallet.publicKey.toBase58() });
     const token = await ensureAuthenticated();
 
     const plan = unwrap<PlanInfo>(await client.getPlan(args.appId, args.planId));
+    console.log("[useSubscribe] Plan fetched:", { id: plan.id, name: plan.name, amount: plan.amountBaseUnits, active: plan.isActive });
     if (!plan.isActive) throw new Error("PLAN_INACTIVE");
     const merchantWallet = plan.app?.merchant.walletAddress;
     if (!merchantWallet) throw new Error("Plan missing merchant wallet");
@@ -51,6 +53,7 @@ export function useSubscribe(): UseSubscribeResult {
       },
       token,
     );
+    console.log("[useSubscribe] Subscribe complete:", { subId: subscription.id, pda: subscription.subscriptionPda });
     return subscription;
   });
 

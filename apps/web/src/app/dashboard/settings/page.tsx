@@ -354,7 +354,26 @@ function ProSubscriptionSection() {
       });
       tx.add(...instructions);
 
-      const signed = await signTransaction(tx);
+      console.log("[Pro Subscribe] TX built:", {
+        feePayer: publicKey.toBase58(),
+        blockhash,
+        instructions: instructions.length,
+        pda: subscriptionPda.toBase58(),
+      });
+
+      let signed: Transaction;
+      try {
+        signed = await signTransaction(tx);
+      } catch (signErr) {
+        console.error("[Pro Subscribe] signTransaction error:", signErr);
+        // If Phantom throws "Unexpected error", it might be a simulation failure
+        // Rethrow with more context
+        throw new Error(
+          `Wallet signing failed: ${signErr instanceof Error ? signErr.message : "Unexpected error"}. ` +
+          `This may mean the subscription PDA already exists on-chain or the wallet state is stale. ` +
+          `Try refreshing the page and reconnecting your wallet.`
+        );
+      }
       const signature = await connection.sendRawTransaction(signed.serialize(), {
         skipPreflight: false,
         preflightCommitment: "confirmed",
@@ -437,9 +456,7 @@ function ProSubscriptionSection() {
         usdcMint: process.env.NEXT_PUBLIC_USDC_MINT,
         programId: process.env.NEXT_PUBLIC_PROGRAM_ID,
       });
-      const { instructions } = client.buildCancelTransaction(publicKey, {
-        subscriptionPda,
-        subscriberWallet,
+      const { instructions } = client.buildSubscriberCancelTransaction(publicKey, {
         merchantWallet,
         planSeed,
       });

@@ -16,7 +16,6 @@ import {
   planSeedToBuffer,
   planSeedToArray,
 } from "@recur/solana-client";
-import crypto from "crypto";
 import { InsufficientFundsError } from "./errors.js";
 
 import type {
@@ -41,16 +40,12 @@ import bs58 from "bs58";
 
 const SUBSCRIPTION_ACCOUNT_SIZE = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 8 + 1;
 
-function ixDiscriminator(name: string): Buffer {
-  return Buffer.from(
-    crypto.createHash("sha256").update(`global:${name}`).digest(),
-  ).subarray(0, 8);
-}
-
-const IX_INITIALIZE_SUBSCRIPTION = ixDiscriminator("initialize_subscription");
-const IX_REQUEST_CANCEL = ixDiscriminator("request_cancel");
-const IX_FINALIZE_CANCEL = ixDiscriminator("finalize_cancel");
-const IX_SUBSCRIBER_CANCEL = ixDiscriminator("subscriber_cancel");
+// Pre-computed Anchor instruction discriminators: sha256("global:<name>")[0..8]
+// These are static and deterministic — no need for runtime crypto.
+const IX_INITIALIZE_SUBSCRIPTION = new Uint8Array([208, 156, 144, 38, 56, 65, 152, 18]);
+const IX_REQUEST_CANCEL = new Uint8Array([244, 78, 42, 227, 165, 174, 94, 167]);
+const IX_FINALIZE_CANCEL = new Uint8Array([6, 200, 45, 123, 144, 47, 207, 102]);
+const IX_SUBSCRIBER_CANCEL = new Uint8Array([184, 148, 59, 218, 111, 33, 121, 16]);
 
 export class RecurClient {
   readonly connection: Connection;
@@ -170,11 +165,12 @@ export class RecurClient {
       delegationAmount,
     );
 
-    const ixData = Buffer.alloc(8 + 8 + 8 + 8);
-    IX_INITIALIZE_SUBSCRIPTION.copy(ixData, 0);
-    ixData.writeBigUInt64LE(BigInt(options.amount), 8);
-    ixData.writeBigUInt64LE(BigInt(options.intervalSeconds), 16);
-    Buffer.from(seedArray).copy(ixData, 24);
+    const ixData = new Uint8Array(8 + 8 + 8 + 8);
+    ixData.set(IX_INITIALIZE_SUBSCRIPTION, 0);
+    const dv = new DataView(ixData.buffer);
+    dv.setBigUint64(8, BigInt(options.amount), true);
+    dv.setBigUint64(16, BigInt(options.intervalSeconds), true);
+    ixData.set(seedArray, 24);
 
     const initIx = new TransactionInstruction({
       programId: this.programId,
@@ -186,7 +182,7 @@ export class RecurClient {
         { pubkey: this.usdcMint, isSigner: false, isWritable: false },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ],
-      data: ixData,
+      data: Buffer.from(ixData),
     });
 
     const createAtaIx = createAssociatedTokenAccountIdempotentInstruction(
@@ -261,8 +257,8 @@ export class RecurClient {
       this.programId,
     );
 
-    const ixData = Buffer.alloc(8);
-    IX_REQUEST_CANCEL.copy(ixData, 0);
+    const ixData = new Uint8Array(8);
+    ixData.set(IX_REQUEST_CANCEL, 0);
 
     const cancelIx = new TransactionInstruction({
       programId: this.programId,
@@ -272,7 +268,7 @@ export class RecurClient {
         { pubkey: subscriberPubkey, isSigner: false, isWritable: false },
         { pubkey: merchantPubkey, isSigner: false, isWritable: false },
       ],
-      data: ixData,
+      data: Buffer.from(ixData),
     });
 
     return { instructions: [cancelIx] };
@@ -294,8 +290,8 @@ export class RecurClient {
       this.programId,
     );
 
-    const ixData = Buffer.alloc(8);
-    IX_FINALIZE_CANCEL.copy(ixData, 0);
+    const ixData = new Uint8Array(8);
+    ixData.set(IX_FINALIZE_CANCEL, 0);
 
     const finalizeIx = new TransactionInstruction({
       programId: this.programId,
@@ -304,7 +300,7 @@ export class RecurClient {
         { pubkey: subscriberPubkey, isSigner: false, isWritable: true },
         { pubkey: merchantPubkey, isSigner: false, isWritable: false },
       ],
-      data: ixData,
+      data: Buffer.from(ixData),
     });
 
     return { instructions: [finalizeIx] };
@@ -328,8 +324,8 @@ export class RecurClient {
       this.programId,
     );
 
-    const ixData = Buffer.alloc(8);
-    IX_SUBSCRIBER_CANCEL.copy(ixData, 0);
+    const ixData = new Uint8Array(8);
+    ixData.set(IX_SUBSCRIBER_CANCEL, 0);
 
     const cancelIx = new TransactionInstruction({
       programId: this.programId,
@@ -339,7 +335,7 @@ export class RecurClient {
         { pubkey: subscriberWallet, isSigner: false, isWritable: true },
         { pubkey: merchantPubkey, isSigner: false, isWritable: false },
       ],
-      data: ixData,
+      data: Buffer.from(ixData),
     });
 
     return { instructions: [cancelIx] };
@@ -423,7 +419,7 @@ export class RecurClient {
   ): Promise<ApiResponse<SubscriptionInfo[]>> {
     return request<SubscriptionInfo[]>(this.http, "/subscriber/subscriptions", {
       authToken,
-      query: { page: options?.page, limit: options?.limit },
+      query: { page: options?.page, limit: options?.limit, appId: options?.appId, status: options?.status },
     });
   }
 
@@ -481,6 +477,15 @@ export class RecurClient {
     options: SubscribeOptions & { appId: string; planId: string },
     authToken: string,
   ): Promise<{ subscriptionPda: PublicKey; signature: string; subscription: SubscriptionInfo }> {
+    console.log("[RecurClient.subscribe]", {
+      subscriber: wallet.publicKey.toBase58(),
+      appId: options.appId,
+      planId: options.planId,
+      amount: options.amount,
+      merchant: options.merchantWallet,
+      planSeed: options.planSeed,
+    });
+
     // Ensure subscriber has enough USDC for at least the first cycle.
     const subscriberAta = getAssociatedTokenAddressSync(this.usdcMint, wallet.publicKey);
     const ataInfo = await this.connection
@@ -488,6 +493,7 @@ export class RecurClient {
       .catch(() => null);
     const balance = BigInt(ataInfo?.value?.amount ?? "0");
     const required = BigInt(options.amount);
+    console.log("[RecurClient.subscribe] USDC balance:", balance.toString(), "required:", required.toString());
     if (balance < required) {
       throw new InsufficientFundsError(
         `Insufficient USDC balance. Required: ${required.toString()} base units, available: ${balance.toString()}`,
@@ -499,7 +505,31 @@ export class RecurClient {
       wallet.publicKey,
       options,
     );
-    const signature = await signAndSend(this.connection, wallet, instructions);
+    console.log("[RecurClient.subscribe] PDA:", subscriptionPda.toBase58(), "| IXs:", instructions.length);
+
+    let signature: string;
+    try {
+      signature = await signAndSend(this.connection, wallet, instructions);
+      console.log("[RecurClient.subscribe] TX confirmed:", signature);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const cause = err instanceof Error && "cause" in err ? String((err as { cause: unknown }).cause) : "";
+      if (msg.includes("already been processed") || cause.includes("already been processed")) {
+        console.log("[RecurClient.subscribe] TX already processed, checking if PDA exists...");
+        const info = await this.connection.getAccountInfo(subscriptionPda);
+        if (info) {
+          console.log("[RecurClient.subscribe] PDA exists — subscribe was already successful, registering with API");
+          signature = "already-subscribed";
+        } else {
+          console.error("[RecurClient.subscribe] PDA not found despite 'already processed' error");
+          throw err;
+        }
+      } else {
+        throw err;
+      }
+    }
+
+    console.log("[RecurClient.subscribe] Registering with API...");
     const registered = await this.registerSubscription(
       {
         appId: options.appId,
@@ -508,6 +538,7 @@ export class RecurClient {
       },
       authToken,
     );
+    console.log("[RecurClient.subscribe] API registration result:", registered);
     return { subscriptionPda, signature, subscription: unwrap(registered) };
   }
 
@@ -518,19 +549,32 @@ export class RecurClient {
   async cancel(
     wallet: RecurWallet,
     options: { merchantWallet: string; planSeed: string; mode?: "request" | "instant" },
+    authToken?: string,
   ): Promise<{ signature: string }> {
     let instructions;
+    let subscriptionPda: PublicKey;
+
+    const { pda } = this.deriveSubscriptionPda(
+      wallet.publicKey,
+      new PublicKey(options.merchantWallet),
+      options.planSeed,
+    );
+    subscriptionPda = pda;
+
+    console.log("[RecurClient.cancel]", {
+      mode: options.mode ?? "request",
+      subscriber: wallet.publicKey.toBase58(),
+      merchant: options.merchantWallet,
+      planSeed: options.planSeed,
+      pda: pda.toBase58(),
+    });
+
     if (options.mode === "instant") {
       ({ instructions } = this.buildSubscriberCancelTransaction(wallet.publicKey, {
         merchantWallet: options.merchantWallet,
         planSeed: options.planSeed,
       }));
     } else {
-      const { pda } = this.deriveSubscriptionPda(
-        wallet.publicKey,
-        new PublicKey(options.merchantWallet),
-        options.planSeed,
-      );
       ({ instructions } = this.buildCancelTransaction(wallet.publicKey, {
         subscriptionPda: pda.toBase58(),
         subscriberWallet: wallet.publicKey.toBase58(),
@@ -538,7 +582,45 @@ export class RecurClient {
         planSeed: options.planSeed,
       }));
     }
-    const signature = await signAndSend(this.connection, wallet, instructions);
+    let signature: string;
+    try {
+      signature = await signAndSend(this.connection, wallet, instructions);
+      console.log("[RecurClient.cancel] TX confirmed:", signature);
+    } catch (err: unknown) {
+      // If "already been processed", the cancel TX was sent before.
+      // Check if PDA is gone — if so, treat as successful cancel.
+      const msg = err instanceof Error ? err.message : String(err);
+      const cause = err instanceof Error && "cause" in err ? String((err as { cause: unknown }).cause) : "";
+      if (msg.includes("already been processed") || cause.includes("already been processed")) {
+        console.log("[RecurClient.cancel] TX already processed, checking PDA on-chain...");
+        const info = await this.connection.getAccountInfo(subscriptionPda);
+        if (!info) {
+          console.log("[RecurClient.cancel] PDA already closed — treating as success");
+          signature = "already-cancelled";
+        } else {
+          console.error("[RecurClient.cancel] PDA still exists despite 'already processed' error");
+          throw err;
+        }
+      } else {
+        throw err;
+      }
+    }
+
+    // Report cancellation to API so DB status updates immediately.
+    // Non-blocking: if the API call fails, the keeper's forceCancel will handle it.
+    if (authToken && signature !== "already-cancelled") {
+      console.log("[RecurClient.cancel] Reporting to API cancel-confirm...");
+      request(this.http, "/subscriber/subscriptions/cancel-confirm", {
+        method: "POST",
+        body: { subscriptionPda: subscriptionPda.toBase58(), txSignature: signature },
+        authToken,
+      }).then((res) => {
+        console.log("[RecurClient.cancel] cancel-confirm response:", res);
+      }).catch((err) => {
+        console.warn("[RecurClient.cancel] cancel-confirm failed (keeper fallback will handle):", err);
+      });
+    }
+
     return { signature };
   }
 

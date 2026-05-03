@@ -148,6 +148,8 @@ export interface CancelOptions {
 export interface ListOptions {
   page?: number;
   limit?: number;
+  appId?: string;
+  status?: string;
 }
 
 export interface CreatePlanOptions {

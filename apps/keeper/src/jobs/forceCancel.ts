@@ -19,7 +19,7 @@ const BATCH_SIZE = parseInt(process.env["KEEPER_BATCH_SIZE"] ?? "100", 10);
  * Only mark as cancelled after confirmed missing across multiple forceCancel runs.
  */
 const pdaNotFoundCounts = new Map<string, number>();
-const PDA_GONE_THRESHOLD = 5;
+const PDA_GONE_THRESHOLD = 1;
 
 /**
  * Track consecutive delegation-invalid counts per subscription.
@@ -31,11 +31,20 @@ const delegationInvalidCounts = new Map<string, number>();
 const DELEGATION_INVALID_THRESHOLD = 3;
 
 export async function forceCancel(): Promise<void> {
+  logger.info("forceCancel job starting");
+
   const subs = await prisma.subscription.findMany({
     where: { status: "active" },
     include: { plan: true },
     take: BATCH_SIZE,
   });
+
+  logger.info({ count: subs.length }, "forceCancel: found active subscriptions");
+
+  if (subs.length === 0) {
+    logger.info("forceCancel: nothing to do");
+    return;
+  }
 
   const keeper = keeperKeypair.publicKey;
 
@@ -151,4 +160,6 @@ export async function forceCancel(): Promise<void> {
       logger.error({ pda: sub.subscriptionPda, err }, "Force cancel tx failed");
     }
   }
+
+  logger.info("forceCancel job complete");
 }

@@ -14,7 +14,7 @@ const PROGRAM_ID = new PublicKey("5HFL1agQqg6wHeLEsLuJVKdLZbMzAC2rGRQkEWk8smLk")
 const FORCE_CANCEL_DISC = Buffer.from([175, 185, 230, 97, 169, 116, 227, 2]);
 
 // PDA to close
-const PDA = new PublicKey("526tKRvg73NH4pthX9pqGpK1knEqRha9HNhdUVu3QaDn");
+const PDA = new PublicKey("CjcGLTWrmAe4eqi6Mq5fFmqgswf6rZuV3npW3h5gJ5bW");
 
 async function main() {
   const info = await connection.getAccountInfo(PDA);

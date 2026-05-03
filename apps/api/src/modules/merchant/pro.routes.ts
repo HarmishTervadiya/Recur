@@ -170,7 +170,7 @@ router.post(
 // ---------------------------------------------------------------------------
 
 const ConfirmBody = z.object({
-  txSignature: z.string().min(32),
+  txSignature: z.string().min(1),
   subscriptionPda: z.string().min(32),
   planId: z.string(),
 });
@@ -218,16 +218,25 @@ router.post(
       now.getTime() + plan.intervalSeconds * 1000,
     );
 
-    // Create the platform subscription + link to merchant
-    const platformSub = await prisma.platformSubscription.create({
-      data: {
+    // Create or update the platform subscription + link to merchant
+    const platformSub = await prisma.platformSubscription.upsert({
+      where: { merchantId: merchant.id },
+      update: {
+        status: "active",
+        platformPlanId: platformPlan.id,
+        currentPeriodStart: now,
+        currentPeriodEnd: periodEnd,
+        subscriptionPda: body.subscriptionPda,
+        nextPaymentDue: now,
+      },
+      create: {
         merchantId: merchant.id,
         platformPlanId: platformPlan.id,
         status: "active",
         currentPeriodStart: now,
         currentPeriodEnd: periodEnd,
         subscriptionPda: body.subscriptionPda,
-        nextPaymentDue: now, // First payment is immediate
+        nextPaymentDue: now,
       },
     });
 
@@ -251,7 +260,7 @@ router.post(
 
     await prisma.subscription.upsert({
       where: { subscriptionPda: body.subscriptionPda },
-      update: { status: "active" },
+      update: { status: "active", nextPaymentDue: now, cancelRequestedAt: null },
       create: {
         subscriptionPda: body.subscriptionPda,
         planId: plan.id,
@@ -297,10 +306,21 @@ router.post(
     }
 
     if (merchant.subscriptionStatus === "cancelled") {
-      throw new AppError(
-        ErrorCode.CONFLICT,
-        "Subscription is already cancelled",
-      );
+      // Return PDA data anyway — let frontend verify on-chain state
+      const subscription = await prisma.subscription.findFirst({
+        where: { subscriptionPda: merchant.platformSubscription.subscriptionPda },
+        include: { plan: { include: { app: { include: { merchant: true } } } } },
+      });
+
+      ok(res, {
+        subscriptionPda: merchant.platformSubscription.subscriptionPda,
+        currentPeriodEnd: merchant.platformSubscription.currentPeriodEnd,
+        subscriberWallet: req.user!.walletAddress,
+        merchantWallet: subscription?.plan?.app?.merchant?.walletAddress ?? null,
+        planSeed: subscription?.plan?.planSeed ?? null,
+        alreadyCancelled: true,
+      });
+      return;
     }
 
     // Return the subscription PDA + plan data so the frontend can build the cancel tx
@@ -316,6 +336,7 @@ router.post(
       subscriberWallet: req.user!.walletAddress,
       merchantWallet: subscription?.plan?.app?.merchant?.walletAddress ?? null,
       planSeed: subscription?.plan?.planSeed ?? null,
+      alreadyCancelled: false,
     });
   }),
 );
@@ -325,7 +346,7 @@ router.post(
 // ---------------------------------------------------------------------------
 
 const CancelConfirmBody = z.object({
-  txSignature: z.string().min(32),
+  txSignature: z.string().min(1),
 });
 
 router.post(
@@ -347,6 +368,20 @@ router.post(
         ErrorCode.NOT_FOUND,
         "No active Pro subscription found",
       );
+    }
+
+    // Idempotent: if already cancelled (e.g. keeper beat us), return success
+    if (merchant.platformSubscription.status === "cancelled") {
+      logger.info(
+        { merchantId: merchant.id },
+        "Pro cancel/confirm: already cancelled, returning success",
+      );
+      ok(res, {
+        tier: "pro",
+        subscriptionStatus: "cancelled",
+        currentPeriodEnd: merchant.platformSubscription.currentPeriodEnd,
+      });
+      return;
     }
 
     // Mark the platform subscription as cancelled

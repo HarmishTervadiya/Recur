@@ -154,10 +154,8 @@ router.post(
       );
     }
 
-    // Compute first payment due date
-    const nextPaymentDue = new Date(
-      Date.now() + plan.intervalSeconds * 1000,
-    );
+    // First payment due immediately — keeper will process on next cycle
+    const nextPaymentDue = new Date();
 
     const sub = await prisma.subscription.upsert({
       where: { subscriptionPda },

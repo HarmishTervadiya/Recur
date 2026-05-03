@@ -56,6 +56,18 @@ export async function forceCancel(): Promise<void> {
       logger.warn({ pda: sub.subscriptionPda }, "Invalid PDA (non-base58), skipping");
       continue;
     }
+
+    // Grace period: skip subscriptions created/updated in the last 60s to avoid
+    // race conditions where the PDA hasn't been confirmed on-chain yet.
+    const ageMs = Date.now() - new Date(sub.updatedAt ?? sub.createdAt).getTime();
+    if (ageMs < 60_000) {
+      logger.debug(
+        { pda: sub.subscriptionPda, ageMs },
+        "Subscription too new, skipping forceCancel check",
+      );
+      continue;
+    }
+
     const onchain = await fetchSubscription(pda);
 
     if (!onchain) {

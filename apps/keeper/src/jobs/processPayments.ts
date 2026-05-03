@@ -212,8 +212,19 @@ export async function processPayments(): Promise<void> {
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       const isInsufficientFunds = errMsg.includes("insufficient funds") || errMsg.includes("0x1");
+      const isPdaGone = errMsg.includes("AccountNotInitialized") || errMsg.includes("0xbc4");
 
-      if (isInsufficientFunds) {
+      if (isPdaGone) {
+        logger.warn(
+          { pda: sub.subscriptionPda },
+          "PDA closed on-chain (AccountNotInitialized) — marking subscription cancelled",
+        );
+        await prisma.subscription.update({
+          where: { id: sub.id },
+          data: { status: "cancelled", cancelledAt: new Date() },
+        });
+        continue;
+      } else if (isInsufficientFunds) {
         logger.warn(
           { pda: sub.subscriptionPda },
           "Subscriber has insufficient token balance — deferring next payment by 1 hour",

@@ -321,7 +321,7 @@ function ProSubscriptionSection() {
 
       const { planId, planSeed, amountBaseUnits, intervalSeconds, merchantWallet } = res.data;
 
-      // Step 2: Build on-chain subscribe transaction using SDK
+      // Step 2: Build TX using SDK
       const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com";
       const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
@@ -331,6 +331,7 @@ function ProSubscriptionSection() {
         usdcMint: process.env.NEXT_PUBLIC_USDC_MINT,
         programId: process.env.NEXT_PUBLIC_PROGRAM_ID,
       });
+
       const { subscriptionPda, instructions } = client.buildSubscribeTransaction(
         publicKey,
         {
@@ -343,46 +344,48 @@ function ProSubscriptionSection() {
         },
       );
 
-      // Step 3: Sign and send transaction
-      toast("info", "Please approve the transaction in your wallet...");
+      console.log("[Pro Subscribe] PDA:", subscriptionPda.toBase58(), "| IXs:", instructions.length);
 
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
-      const tx = new Transaction({
-        feePayer: publicKey,
-        blockhash,
-        lastValidBlockHeight,
-      });
-      tx.add(...instructions);
+      // Step 3: Check if PDA already exists (recovery from previous failed attempt)
+      const existingPda = await connection.getAccountInfo(subscriptionPda);
+      let signature = "";
 
-      console.log("[Pro Subscribe] TX built:", {
-        feePayer: publicKey.toBase58(),
-        blockhash,
-        instructions: instructions.length,
-        pda: subscriptionPda.toBase58(),
-      });
+      if (existingPda) {
+        console.log("[Pro Subscribe] PDA already exists on-chain — skipping TX");
+        signature = "already-subscribed";
+      } else {
+        toast("info", "Please approve the transaction in your wallet...");
 
-      let signed: Transaction;
-      try {
-        signed = await signTransaction(tx);
-      } catch (signErr) {
-        console.error("[Pro Subscribe] signTransaction error:", signErr);
-        // If Phantom throws "Unexpected error", it might be a simulation failure
-        // Rethrow with more context
-        throw new Error(
-          `Wallet signing failed: ${signErr instanceof Error ? signErr.message : "Unexpected error"}. ` +
-          `This may mean the subscription PDA already exists on-chain or the wallet state is stale. ` +
-          `Try refreshing the page and reconnecting your wallet.`
-        );
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+        const tx = new Transaction({
+          feePayer: publicKey,
+          blockhash,
+          lastValidBlockHeight,
+        });
+        tx.add(...instructions);
+
+        const signed = await signTransaction(tx);
+        try {
+          signature = await connection.sendRawTransaction(signed.serialize(), {
+            skipPreflight: false,
+            preflightCommitment: "confirmed",
+          });
+
+          await connection.confirmTransaction(
+            { signature, blockhash, lastValidBlockHeight },
+            "confirmed",
+          );
+        } catch (txErr: unknown) {
+          const txMsg = txErr instanceof Error ? txErr.message : "";
+          if (txMsg.includes("already been processed") || txMsg.includes("AlreadyProcessed")) {
+            console.log("[Pro Subscribe] TX already processed, continuing to confirm");
+            if (!signature) signature = "already-subscribed";
+          } else {
+            throw txErr;
+          }
+        }
+        console.log("[Pro Subscribe] TX confirmed:", signature);
       }
-      const signature = await connection.sendRawTransaction(signed.serialize(), {
-        skipPreflight: false,
-        preflightCommitment: "confirmed",
-      });
-
-      await connection.confirmTransaction(
-        { signature, blockhash, lastValidBlockHeight },
-        "confirmed",
-      );
 
       // Step 4: Confirm with API to activate Pro tier
       const confirmRes = await apiClient<{
@@ -407,7 +410,8 @@ function ProSubscriptionSection() {
       refresh();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Transaction failed";
-      if (message.includes("User rejected")) {
+      console.error("[Pro Subscribe] Error:", err);
+      if (message.includes("User rejected") || message.includes("rejected")) {
         toast("error", "Transaction cancelled by user.");
       } else {
         toast("error", `Subscription failed: ${message}`);
@@ -432,6 +436,7 @@ function ProSubscriptionSection() {
         subscriberWallet: string;
         merchantWallet: string | null;
         planSeed: string | null;
+        alreadyCancelled: boolean;
       }>("/merchant/me/pro/cancel", { method: "POST" });
 
       if (!res.success || !res.data) {
@@ -439,49 +444,78 @@ function ProSubscriptionSection() {
         return;
       }
 
-      const { subscriptionPda, merchantWallet, planSeed, subscriberWallet } = res.data;
+      const { subscriptionPda, merchantWallet, planSeed, alreadyCancelled } = res.data;
 
       if (!merchantWallet || !planSeed) {
         toast("error", "Missing subscription data for cancellation. Please contact support.");
         return;
       }
 
-      // Step 2: Build on-chain cancel transaction
-      const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com";
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+      // Step 2: Check if PDA still exists on-chain (source of truth)
+      const pdaPubkey = new PublicKey(subscriptionPda);
+      const pdaAccount = await connection.getAccountInfo(pdaPubkey);
 
-      const client = new RecurClient({
-        rpcUrl,
-        apiBaseUrl,
-        usdcMint: process.env.NEXT_PUBLIC_USDC_MINT,
-        programId: process.env.NEXT_PUBLIC_PROGRAM_ID,
-      });
-      const { instructions } = client.buildSubscriberCancelTransaction(publicKey, {
-        merchantWallet,
-        planSeed,
-      });
+      // If DB says cancelled AND PDA is gone → truly done, no action needed
+      if (alreadyCancelled && !pdaAccount) {
+        toast("success", "Subscription is already cancelled.");
+        setShowCancelModal(false);
+        refresh();
+        return;
+      }
 
-      // Step 3: Sign and send
-      toast("info", "Please approve the cancellation in your wallet...");
+      let signature = "";
 
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
-      const tx = new Transaction({
-        feePayer: publicKey,
-        blockhash,
-        lastValidBlockHeight,
-      });
-      tx.add(...instructions);
+      if (!pdaAccount) {
+        // PDA already closed but DB not updated yet — skip TX, just confirm with API
+        console.log("[Pro Cancel] PDA already gone on-chain, skipping TX");
+        signature = "already-cancelled";
+      } else {
+        // Step 3: Build on-chain cancel transaction
+        const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com";
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
-      const signed = await signTransaction(tx);
-      const signature = await connection.sendRawTransaction(signed.serialize(), {
-        skipPreflight: false,
-        preflightCommitment: "confirmed",
-      });
+        const client = new RecurClient({
+          rpcUrl,
+          apiBaseUrl,
+          usdcMint: process.env.NEXT_PUBLIC_USDC_MINT,
+          programId: process.env.NEXT_PUBLIC_PROGRAM_ID,
+        });
+        const { instructions } = client.buildSubscriberCancelTransaction(publicKey, {
+          merchantWallet,
+          planSeed,
+        });
 
-      await connection.confirmTransaction(
-        { signature, blockhash, lastValidBlockHeight },
-        "confirmed",
-      );
+        toast("info", "Please approve the cancellation in your wallet...");
+
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+        const tx = new Transaction({
+          feePayer: publicKey,
+          blockhash,
+          lastValidBlockHeight,
+        });
+        tx.add(...instructions);
+
+        const signed = await signTransaction(tx);
+        try {
+          signature = await connection.sendRawTransaction(signed.serialize(), {
+            skipPreflight: false,
+            preflightCommitment: "confirmed",
+          });
+
+          await connection.confirmTransaction(
+            { signature, blockhash, lastValidBlockHeight },
+            "confirmed",
+          );
+        } catch (txErr: unknown) {
+          const txMsg = txErr instanceof Error ? txErr.message : "";
+          if (txMsg.includes("already been processed") || txMsg.includes("AlreadyProcessed")) {
+            console.log("[Pro Cancel] TX already processed, continuing to confirm");
+            if (!signature) signature = "already-cancelled";
+          } else {
+            throw txErr;
+          }
+        }
+      }
 
       // Step 4: Confirm cancellation with API
       const confirmRes = await apiClient<{

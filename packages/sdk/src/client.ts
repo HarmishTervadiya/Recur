@@ -507,25 +507,33 @@ export class RecurClient {
     );
     console.log("[RecurClient.subscribe] PDA:", subscriptionPda.toBase58(), "| IXs:", instructions.length);
 
+    // Check if PDA already exists on-chain (previous TX succeeded but API registration failed)
+    const existingPda = await this.connection.getAccountInfo(subscriptionPda);
     let signature: string;
-    try {
-      signature = await signAndSend(this.connection, wallet, instructions);
-      console.log("[RecurClient.subscribe] TX confirmed:", signature);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      const cause = err instanceof Error && "cause" in err ? String((err as { cause: unknown }).cause) : "";
-      if (msg.includes("already been processed") || cause.includes("already been processed")) {
-        console.log("[RecurClient.subscribe] TX already processed, checking if PDA exists...");
-        const info = await this.connection.getAccountInfo(subscriptionPda);
-        if (info) {
-          console.log("[RecurClient.subscribe] PDA exists — subscribe was already successful, registering with API");
-          signature = "already-subscribed";
+
+    if (existingPda) {
+      console.log("[RecurClient.subscribe] PDA already exists on-chain — skipping TX, going to API registration");
+      signature = "already-subscribed";
+    } else {
+      try {
+        signature = await signAndSend(this.connection, wallet, instructions);
+        console.log("[RecurClient.subscribe] TX confirmed:", signature);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const cause = err instanceof Error && "cause" in err ? String((err as { cause: unknown }).cause) : "";
+        if (msg.includes("already been processed") || cause.includes("already been processed")) {
+          console.log("[RecurClient.subscribe] TX already processed, checking if PDA exists...");
+          const info = await this.connection.getAccountInfo(subscriptionPda);
+          if (info) {
+            console.log("[RecurClient.subscribe] PDA exists — subscribe was already successful, registering with API");
+            signature = "already-subscribed";
+          } else {
+            console.error("[RecurClient.subscribe] PDA not found despite 'already processed' error");
+            throw err;
+          }
         } else {
-          console.error("[RecurClient.subscribe] PDA not found despite 'already processed' error");
           throw err;
         }
-      } else {
-        throw err;
       }
     }
 

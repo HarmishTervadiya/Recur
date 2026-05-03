@@ -25,7 +25,7 @@ function hashToken(token: string): string {
 function issueTokens(payload: AuthPayload) {
   const accessToken = jwt.sign(payload, env.JWT_SECRET, {
     expiresIn: env.JWT_ACCESS_TTL,
-  });
+  } as jwt.SignOptions);
   const refreshToken = crypto.randomBytes(48).toString("base64url");
   return { accessToken, refreshToken };
 }

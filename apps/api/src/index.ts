@@ -28,6 +28,23 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
+// Request/response logging middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  const { method, originalUrl } = req;
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    const level = res.statusCode >= 400 ? "warn" : "info";
+    log[level]({
+      method,
+      path: originalUrl,
+      status: res.statusCode,
+      ms: duration,
+    }, `${method} ${originalUrl} → ${res.statusCode} (${duration}ms)`);
+  });
+  next();
+});
+
 // Apply general rate limit to all routes
 app.use(apiLimiter);
 

@@ -60,9 +60,11 @@ router.get(
     const subscriber = await getSubscriber(req.user!.walletAddress);
     const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>);
     const statusFilter = req.query["status"] as string | undefined;
+    const appIdFilter = req.query["appId"] as string | undefined;
 
     const where: Record<string, unknown> = { subscriberId: subscriber.id };
     if (statusFilter) where["status"] = statusFilter;
+    if (appIdFilter) where["plan"] = { appId: appIdFilter };
 
     const [subs, total] = await Promise.all([
       prisma.subscription.findMany({
@@ -139,6 +141,13 @@ router.post(
       },
     });
     if (existing) {
+      logger.warn({
+        subscriberId: subscriber.id,
+        appId,
+        existingSubId: existing.id,
+        existingPda: existing.subscriptionPda,
+        newPda: subscriptionPda,
+      }, "409: Active subscription already exists for this app");
       throw new AppError(
         ErrorCode.SUBSCRIPTION_ALREADY_EXISTS,
         "Active subscription already exists for this app. Cancel existing subscription first.",
@@ -171,6 +180,69 @@ router.post(
       include: { plan: true },
     });
     ok(res, sub, 201);
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// POST /subscriptions/cancel-confirm — mark subscription as cancelled after
+// on-chain subscriber_cancel TX succeeds.
+// ---------------------------------------------------------------------------
+
+const CancelConfirmBody = z.object({
+  subscriptionPda: z.string().min(32),
+  txSignature: z.string().min(32),
+});
+
+router.post(
+  "/subscriptions/cancel-confirm",
+  wrap(async (req, res) => {
+    const { subscriptionPda, txSignature } = CancelConfirmBody.parse(req.body);
+    const subscriber = await getSubscriber(req.user!.walletAddress);
+
+    logger.info({ subscriptionPda, txSignature, subscriberId: subscriber.id }, "cancel-confirm received");
+
+    const sub = await prisma.subscription.findFirst({
+      where: {
+        subscriptionPda,
+        subscriberId: subscriber.id,
+        status: "active",
+      },
+      include: { plan: true },
+    });
+
+    if (!sub) {
+      logger.warn({ subscriptionPda, subscriberId: subscriber.id }, "cancel-confirm: no active subscription found");
+      throw new AppError(
+        ErrorCode.SUBSCRIPTION_NOT_FOUND,
+        "Active subscription not found",
+      );
+    }
+
+    await prisma.subscription.update({
+      where: { id: sub.id },
+      data: {
+        status: "cancelled",
+        cancelledAt: new Date(),
+      },
+    });
+
+    await prisma.subscriptionEvent.create({
+      data: {
+        subscriptionId: sub.id,
+        eventType: "cancel_finalized",
+        metadata: { txSignature, cancelType: "subscriber" },
+      },
+    });
+
+    // Dispatch webhook to merchant
+    void dispatchWebhook(sub.plan.appId, "cancel_finalized", {
+      subscriptionPda,
+      subscriptionId: sub.id,
+      cancelType: "subscriber",
+      txSignature,
+    }).catch((err) => logger.error({ err }, "Webhook dispatch failed for cancel-confirm"));
+
+    ok(res, { id: sub.id, status: "cancelled" });
   }),
 );
 

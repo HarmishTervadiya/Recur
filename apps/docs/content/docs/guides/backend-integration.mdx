@@ -1,0 +1,330 @@
+---
+title: Backend Integration
+description: End-to-end guide for integrating Recur into your server-side application.
+---
+
+# Backend Integration
+
+This guide walks you through a complete server-side Recur integration — from SDK installation to processing payments and managing subscriber lifecycle.
+
+## Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Your Backend                                                    │
+│                                                                  │
+│  1. Install @recur/sdk                                          │
+│  2. Initialize client with API key                              │
+│  3. Create app + plans (one-time setup)                         │
+│  4. Expose subscribe endpoint for your frontend                 │
+│  5. Receive webhook events → grant/revoke access                │
+│  6. Query subscriptions & transactions as needed                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Step 1: Install the SDK
+
+```bash
+npm install @recur/sdk @solana/web3.js
+```
+
+## Step 2: Initialize the Client
+
+```ts title="src/lib/recur.ts"
+import { RecurClient } from "@recur/sdk";
+
+export const recur = new RecurClient({
+  rpcUrl: process.env.SOLANA_RPC_URL ?? "https://api.devnet.solana.com",
+  apiKey: process.env.RECUR_API_KEY!, // Required for merchant operations
+  apiBaseUrl: process.env.RECUR_API_URL ?? "https://api.recur.com",
+});
+```
+
+> **API Key is required** for all merchant operations (creating plans, listing subscriptions, querying transactions). Get one from Dashboard → API Keys.
+
+## Step 3: Create an App and Plans
+
+This is typically a one-time setup, done during initial deployment or via the dashboard.
+
+```ts title="src/scripts/setup-plans.ts"
+import { recur } from "../lib/recur";
+
+async function setup() {
+  // Create an app (container for plans)
+  const app = await recur.createApp({ name: "My SaaS Platform" });
+  console.log("App created:", app.id);
+
+  // Create plans
+  const monthly = await recur.createPlan(app.id, {
+    name: "Pro Monthly",
+    amount: 29_000_000,        // $29.00 USDC (6 decimals)
+    intervalSeconds: 2_592_000, // 30 days
+  });
+
+  const annual = await recur.createPlan(app.id, {
+    name: "Pro Annual",
+    amount: 290_000_000,       // $290.00 USDC
+    intervalSeconds: 31_536_000, // 365 days
+  });
+
+  console.log("Plans created:", monthly.planSeed, annual.planSeed);
+  // Save plan IDs/seeds in your database or config
+}
+
+setup();
+```
+
+## Step 4: Serve Subscribe Data to Frontend
+
+Your frontend needs plan details and your merchant wallet to build the subscribe transaction:
+
+```ts title="src/routes/plans.ts (Express example)"
+import express from "express";
+import { recur } from "../lib/recur";
+
+const router = express.Router();
+
+// GET /api/plans — return plans for your app
+router.get("/plans", async (req, res) => {
+  const plans = await recur.listPlans("YOUR_APP_ID");
+  res.json({
+    plans: plans.map((p) => ({
+      id: p.id,
+      name: p.name,
+      amount: p.amountBaseUnits.toString(),
+      intervalSeconds: p.intervalSeconds,
+      planSeed: p.planSeed,
+    })),
+    merchantWallet: process.env.MERCHANT_WALLET!,
+  });
+});
+
+export default router;
+```
+
+The frontend then uses this data to call `client.buildSubscribeTransaction()` — see [Subscribe docs](/docs/sdk/subscribe).
+
+## Step 5: Register Subscriptions
+
+After the subscriber's on-chain transaction confirms, register the subscription with Recur so the Keeper knows to process payments:
+
+```ts
+// Called after the subscribe transaction is confirmed on-chain
+router.post("/subscriptions/register", async (req, res) => {
+  const { subscriptionPda, planId, subscriberWallet } = req.body;
+
+  const subscription = await recur.registerSubscription({
+    subscriptionPda,
+    planId,
+    subscriberWallet,
+  });
+
+  // Save subscription.id in your database, linked to the user
+  await db.users.update({
+    where: { wallet: subscriberWallet },
+    data: { subscriptionId: subscription.id, tier: "pro" },
+  });
+
+  res.json({ subscription });
+});
+```
+
+> **Important:** The Keeper will only process payments for registered subscriptions. Always register after on-chain confirmation.
+
+## Step 6: Handle Webhook Events
+
+This is where you grant/revoke access based on payment status. See the full [Webhooks guide](/docs/guides/webhooks) for setup details.
+
+```ts title="src/routes/webhooks.ts"
+import express from "express";
+import { verifyWebhookSignature, parseWebhookPayload } from "@recur/sdk";
+
+const router = express.Router();
+const secret = process.env.RECUR_WEBHOOK_SECRET!;
+
+router.post(
+  "/webhooks/recur",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    const body = req.body.toString();
+    const signature = req.headers["x-recur-signature"] as string;
+    const timestamp = req.headers["x-recur-timestamp"] as string;
+
+    // Verify signature
+    try {
+      verifyWebhookSignature(body, signature, timestamp, secret);
+    } catch {
+      return res.status(401).json({ error: "Invalid signature" });
+    }
+
+    const event = parseWebhookPayload(body);
+
+    switch (event.type) {
+      case "subscription_created":
+        // New subscription confirmed — provision user
+        await db.users.update({
+          where: { wallet: event.data.subscriberWallet },
+          data: { tier: "pro", subscriptionStatus: "active" },
+        });
+        break;
+
+      case "payment_success":
+        // Recurring payment collected — extend access
+        await db.users.update({
+          where: { subscriptionId: event.data.subscriptionId },
+          data: { paidUntil: event.data.nextPaymentDue },
+        });
+        break;
+
+      case "payment_failed":
+        // Payment failed — notify user, start grace period
+        await db.users.update({
+          where: { subscriptionId: event.data.subscriptionId },
+          data: { subscriptionStatus: "past_due" },
+        });
+        await sendEmail(event.data.subscriberWallet, "Payment failed — please top up USDC");
+        break;
+
+      case "cancel_requested":
+        // User requested cancel — access continues until period ends
+        await db.users.update({
+          where: { subscriptionId: event.data.subscriptionId },
+          data: { subscriptionStatus: "cancelling" },
+        });
+        break;
+
+      case "cancel_finalized":
+        // Cancel complete — revoke access
+        await db.users.update({
+          where: { subscriptionId: event.data.subscriptionId },
+          data: { tier: "free", subscriptionStatus: "cancelled" },
+        });
+        break;
+
+      case "delegation_revoked":
+        // Subscriber revoked token approval — treat as cancel
+        await db.users.update({
+          where: { subscriptionId: event.data.subscriptionId },
+          data: { tier: "free", subscriptionStatus: "cancelled" },
+        });
+        break;
+    }
+
+    res.status(200).json({ received: true });
+  },
+);
+
+export default router;
+```
+
+## Step 7: Query Subscriptions & Transactions
+
+Use the SDK to check subscription status or list payment history:
+
+```ts
+// Get all active subscriptions for your app
+const subscriptions = await recur.listSubscriptions("YOUR_APP_ID", {
+  status: "active",
+  page: 1,
+  limit: 50,
+});
+
+// Get a specific subscription
+const sub = await recur.getSubscription(subscriptionId);
+
+// List transactions (payments) for a subscription
+const payments = await recur.listTransactions(subscriptionId, {
+  page: 1,
+  limit: 20,
+});
+```
+
+## Step 8: Handle Cancellations
+
+When a subscriber cancels, you can listen for the `cancel_finalized` webhook event (recommended), or check proactively:
+
+```ts
+// Check if a subscription is still active
+const sub = await recur.getSubscription(subscriptionId);
+
+if (sub.status === "cancelled") {
+  // Revoke access
+} else if (sub.status === "active" && sub.cancelRequestedAt) {
+  // User requested cancel but paid period hasn't ended yet
+  // Keep access until cancelledAt or nextPaymentDue
+}
+```
+
+## Complete Example: Express Server
+
+```ts title="src/server.ts"
+import express from "express";
+import { RecurClient, verifyWebhookSignature, parseWebhookPayload } from "@recur/sdk";
+
+const app = express();
+const recur = new RecurClient({
+  rpcUrl: process.env.SOLANA_RPC_URL!,
+  apiKey: process.env.RECUR_API_KEY!,
+  apiBaseUrl: process.env.RECUR_API_URL!,
+});
+
+// JSON parsing for regular routes
+app.use("/api", express.json());
+
+// Plans endpoint
+app.get("/api/plans", async (req, res) => {
+  const plans = await recur.listPlans(process.env.RECUR_APP_ID!);
+  res.json({ plans, merchantWallet: process.env.MERCHANT_WALLET });
+});
+
+// Register subscription after on-chain confirm
+app.post("/api/subscriptions/register", async (req, res) => {
+  const result = await recur.registerSubscription(req.body);
+  res.json(result);
+});
+
+// Webhook receiver (raw body for HMAC)
+app.post(
+  "/webhooks/recur",
+  express.raw({ type: "application/json" }),
+  (req, res) => {
+    const body = req.body.toString();
+    try {
+      verifyWebhookSignature(
+        body,
+        req.headers["x-recur-signature"] as string,
+        req.headers["x-recur-timestamp"] as string,
+        process.env.RECUR_WEBHOOK_SECRET!,
+      );
+    } catch {
+      return res.status(401).end();
+    }
+
+    const event = parseWebhookPayload(body);
+    console.log("Webhook received:", event.type, event.data);
+    // Handle event...
+
+    res.status(200).end();
+  },
+);
+
+app.listen(3001, () => console.log("Server running on :3001"));
+```
+
+## Environment Variables
+
+```env title=".env"
+SOLANA_RPC_URL=https://api.devnet.solana.com
+RECUR_API_KEY=sk_live_...
+RECUR_API_URL=https://api.recur.com
+RECUR_APP_ID=your-app-id
+RECUR_WEBHOOK_SECRET=whsec_...
+MERCHANT_WALLET=YourSolanaWalletBase58Address
+```
+
+## Next Steps
+
+- [Webhooks guide](/docs/guides/webhooks) — deep dive on event handling and payload format
+- [API Keys guide](/docs/guides/api-keys) — key management and security
+- [Cancel flows](/docs/sdk/cancel) — all three cancellation methods
+- [Error handling](/docs/sdk/errors) — handle API and SDK errors gracefully

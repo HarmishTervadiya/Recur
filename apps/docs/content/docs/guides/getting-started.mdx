@@ -1,0 +1,198 @@
+---
+title: Getting Started
+description: Prerequisites and the complete setup flow for merchants and subscribers.
+---
+
+# Getting Started
+
+This guide explains every step to go from zero to accepting recurring USDC payments on Solana. Each step is marked **required** or **optional** so you know exactly what's needed.
+
+## Prerequisites
+
+Before integrating Recur, you need:
+
+| Requirement | Why | How to get it |
+|-------------|-----|---------------|
+| **Solana wallet** (Phantom, Solflare, etc.) | Signs transactions and authenticates your merchant account | Install from phantom.app or solflare.com |
+| **SOL balance** | Pays transaction fees (~0.005 SOL per tx) | Use a faucet on devnet, or purchase for mainnet |
+| **USDC (SPL Token)** | The payment currency for all subscriptions | Devnet: spl-token airdrop; Mainnet: purchase/bridge |
+| **Node.js ≥ 18** | Runs the SDK and your backend | nodejs.org |
+
+## Setup Flow
+
+### For Merchants (accepting payments)
+
+```
+Step 1: Connect wallet & sign in ─── REQUIRED
+Step 2: Create a merchant account ─── REQUIRED (automatic on first sign-in)
+Step 3: Create an App ──────────────── REQUIRED
+Step 4: Create a Plan ─────────────── REQUIRED
+Step 5: Generate an API Key ────────── REQUIRED (for server-side operations)
+Step 6: Set up webhook endpoint ────── RECOMMENDED (for payment notifications)
+Step 7: Integrate subscribe flow ───── REQUIRED (frontend or API)
+Step 8: Handle webhook events ─────── RECOMMENDED
+```
+
+### For Subscribers (making payments)
+
+```
+Step 1: Connect wallet ────────────── REQUIRED
+Step 2: Approve USDC delegation ───── REQUIRED (one-time per subscription)
+Step 3: Subscribe to a plan ────────── REQUIRED
+Step 4: (Payments are automatic) ──── No action needed — Keeper handles billing
+Step 5: Cancel (when desired) ─────── OPTIONAL
+```
+
+## Step-by-step: Merchant Setup
+
+### Step 1: Sign In (Required)
+
+Connect your Solana wallet to the Recur dashboard at `app.recur.com` (or your self-hosted instance). The auth flow:
+
+1. Request a nonce from the API
+2. Sign the nonce with your wallet
+3. Submit the signature → receive a JWT
+
+This happens automatically in the dashboard UI. For programmatic access, see [Authentication](/docs/sdk/authentication).
+
+### Step 2: Create an App (Required)
+
+An App groups your plans and subscriptions. You need at least one.
+
+**Via Dashboard:** Go to Dashboard → Apps → Create App
+
+**Via API:**
+```ts
+const app = await client.createApp({ name: "My SaaS" });
+// Returns: { id, name, isActive, createdAt }
+```
+
+### Step 3: Create a Plan (Required)
+
+A Plan defines the price and billing interval.
+
+**Via Dashboard:** Apps → [Your App] → Plans → Create Plan
+
+**Via API:**
+```ts
+const plan = await client.createPlan(app.id, {
+  name: "Pro Monthly",
+  amount: 49_000_000,        // $49.00 in USDC base units (6 decimals)
+  intervalSeconds: 2_592_000, // 30 days
+});
+```
+
+### Step 4: Generate an API Key (Required for server-side)
+
+API keys let your backend call the Recur API without wallet signatures.
+
+**Via Dashboard:** Dashboard → API Keys → Create New Key
+
+**Via API:** See [API Keys guide](/docs/guides/api-keys)
+
+> **Important:** Copy the key immediately — it's shown only once.
+
+### Step 5: Set Up Webhooks (Recommended)
+
+Webhooks notify your server of payment events so you can grant/revoke access.
+
+**Via Dashboard:** Apps → [Your App] → Webhook → Add Endpoint
+
+**Via API:**
+```ts
+const webhook = await client.createWebhook(app.id, {
+  url: "https://your-server.com/webhooks/recur",
+});
+// Save webhook.secret securely — needed for signature verification
+```
+
+See the full [Webhooks guide](/docs/guides/webhooks) for event handling.
+
+### Step 6: Integrate the Subscribe Flow (Required)
+
+On your frontend, build a subscribe transaction when a user wants to pay:
+
+```ts
+import { RecurClient } from "@recur/sdk";
+
+const client = new RecurClient({ rpcUrl: "https://api.devnet.solana.com" });
+
+const { instructions } = client.buildSubscribeTransaction(subscriberWallet, {
+  merchantWallet: "YOUR_MERCHANT_WALLET",
+  planSeed: plan.planSeed,
+  amount: plan.amount,
+  intervalSeconds: plan.intervalSeconds,
+  delegateAmount: plan.amount * 12, // 12 months of delegation
+});
+
+// Add instructions to a Transaction and have the user sign it
+```
+
+## Browser Polyfills (Frontend Projects)
+
+If you're using `@recur/sdk` in a browser environment (Next.js, Vite, etc.), you need Node.js polyfills for `@solana/web3.js` dependencies:
+
+### Next.js (webpack)
+
+```js title="next.config.js"
+const webpack = require("webpack");
+
+module.exports = {
+  transpilePackages: ["@recur/sdk", "@recur/solana-client"],
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        crypto: require.resolve("crypto-browserify"),
+        stream: require.resolve("stream-browserify"),
+        buffer: require.resolve("buffer"),
+        process: require.resolve("process/browser"),
+        vm: false,
+        fs: false,
+        path: false,
+      };
+      config.plugins.push(
+        new webpack.ProvidePlugin({
+          Buffer: ["buffer", "Buffer"],
+          process: ["process/browser"],
+        }),
+      );
+    }
+    return config;
+  },
+};
+```
+
+Install the polyfill packages:
+
+```bash
+npm install buffer process crypto-browserify stream-browserify
+```
+
+### Vite
+
+```ts title="vite.config.ts"
+import { defineConfig } from "vite";
+import { nodePolyfills } from "vite-plugin-node-polyfills";
+
+export default defineConfig({
+  plugins: [nodePolyfills({ include: ["buffer", "process", "crypto", "stream"] })],
+});
+```
+
+> **Note:** The `@recur/sdk` itself uses `DataView` (not `Buffer.writeBigUInt64LE`) for BigInt serialization, so no custom BigInt polyfills are needed. The standard polyfills above are only needed for `@solana/web3.js` internals.
+
+## What's Optional?
+
+| Feature | Required? | Why you might skip it |
+|---------|-----------|----------------------|
+| Webhook setup | Recommended | You can poll the API instead, but webhooks are more reliable and real-time |
+| Email on profile | Optional | Only used for notifications from Recur to you |
+| Business name/URL | Optional | Shown to subscribers for trust — recommended but not enforced |
+| Phone number | Optional | Not currently used |
+| Recur Pro tier | Optional | Unlocks CSV exports, priority support, higher rate limits |
+
+## Next Steps
+
+- [Backend Integration](/docs/guides/backend-integration) — full server-side implementation
+- [Webhooks](/docs/guides/webhooks) — handle payment events
+- [API Keys](/docs/guides/api-keys) — secure server-to-server access

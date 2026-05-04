@@ -1,0 +1,216 @@
+---
+title: API Keys
+description: Create, use, and manage API keys for server-to-server Recur API access.
+---
+
+# API Keys Guide
+
+API keys authenticate your server-to-server requests to the Recur API. They let your backend create plans, query subscriptions, and manage webhooks without requiring wallet signatures on every request.
+
+## How API Key Auth Works
+
+| Auth Method | Use Case | How |
+|-------------|----------|-----|
+| **Wallet JWT** | Frontend/dashboard access | Sign a nonce with your wallet → get a JWT |
+| **API Key** | Server-to-server | Pass `Authorization: Bearer sk_...` header |
+
+API keys are **equivalent to full merchant access** — they can perform any operation your wallet JWT can, except modifying the API keys themselves (you need wallet auth for that).
+
+## Creating an API Key
+
+### Via Dashboard (Recommended)
+
+1. Go to **Dashboard → API Keys**
+2. Click **Create New Key**
+3. **Copy the key immediately** — it's shown only once
+4. Store it in your environment variables
+
+### Via API (requires wallet JWT)
+
+```bash
+curl -X POST https://api.recur.com/merchant/api-keys \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+Response:
+```json
+{
+  "id": "key_cm2x7abc123",
+  "key": "sk_live_a1b2c3d4e5f6g7h8i9j0...",
+  "prefix": "sk_live_a1b2"
+}
+```
+
+> **Warning:** The full key (`sk_live_...`) is only returned once at creation time. If you lose it, revoke it and create a new one.
+
+## Using API Keys
+
+Pass your API key in the `Authorization` header as a Bearer token:
+
+```bash
+# List your plans
+curl https://api.recur.com/merchant/apps/YOUR_APP_ID/plans \
+  -H "Authorization: Bearer sk_live_a1b2c3d4e5f6g7h8i9j0..."
+```
+
+### In the SDK
+
+```ts
+import { RecurClient } from "@recur/sdk";
+
+const client = new RecurClient({
+  rpcUrl: "https://api.devnet.solana.com",
+  apiKey: process.env.RECUR_API_KEY!,
+  apiBaseUrl: "https://api.recur.com",
+});
+
+// All merchant operations now use your API key automatically
+const plans = await client.listPlans(appId);
+```
+
+### In Node.js (raw fetch)
+
+```ts
+const API_KEY = process.env.RECUR_API_KEY!;
+const BASE_URL = process.env.RECUR_API_URL ?? "https://api.recur.com";
+
+async function recurApi(path: string, options?: RequestInit) {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      "Authorization": `Bearer ${API_KEY}`,
+      "Content-Type": "application/json",
+      ...options?.headers,
+    },
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(`Recur API error ${res.status}: ${body?.error?.message ?? res.statusText}`);
+  }
+
+  return res.json();
+}
+
+// Usage
+const { data: plans } = await recurApi("/merchant/apps/APP_ID/plans");
+```
+
+## Scopes and Permissions
+
+API keys currently grant **full merchant access**:
+
+| Operation | Supported |
+|-----------|-----------|
+| List/create/update apps | Yes |
+| List/create plans | Yes |
+| List subscriptions | Yes |
+| List transactions | Yes |
+| Create/delete webhook endpoints | Yes |
+| Export CSV data | Yes (Pro tier) |
+| View analytics | Yes |
+| Modify merchant profile | Yes |
+| Manage API keys | No (requires wallet JWT) |
+
+> **Note:** Fine-grained scopes (read-only, per-app, etc.) are planned for a future release.
+
+## Revoking Keys
+
+If a key is compromised, revoke it immediately:
+
+### Via Dashboard
+
+1. Go to **Dashboard → API Keys**
+2. Click **Revoke** next to the key
+3. Confirm — the key stops working instantly
+
+### Via API
+
+```bash
+curl -X DELETE https://api.recur.com/merchant/api-keys/KEY_ID \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+> **Revocation is instant and permanent.** Any server using the revoked key will get `401 Unauthorized` on the next request.
+
+## Security Best Practices
+
+### Storage
+
+```bash
+# .env (never commit this file)
+RECUR_API_KEY=sk_live_a1b2c3d4e5f6g7h8i9j0...
+
+# Add to .gitignore
+echo ".env" >> .gitignore
+```
+
+**Do:**
+- Store in environment variables or a secrets manager (AWS Secrets Manager, Vault, etc.)
+- Use different keys for development and production
+- Rotate keys periodically (quarterly recommended)
+
+**Don't:**
+- Commit keys to source control
+- Log keys in application output
+- Share keys via chat/email (use a secrets manager)
+- Use production keys in development
+
+### Key Rotation
+
+To rotate a key without downtime:
+
+1. Create a new API key
+2. Update your server's environment variable to the new key
+3. Deploy the update
+4. Verify the new key works
+5. Revoke the old key
+
+### Client-Side Safety
+
+**Never expose API keys in client-side code.** API keys are for server-to-server communication only.
+
+```ts
+// ❌ WRONG — exposed to browser
+const client = new RecurClient({ apiKey: "sk_live_..." });
+
+// ✅ CORRECT — call your own backend, which uses the API key
+const plans = await fetch("/api/plans").then((r) => r.json());
+```
+
+If you need client-side access, use the wallet JWT flow (nonce → sign → verify → JWT) instead of API keys.
+
+## Identifying Keys
+
+API keys have a recognizable prefix format:
+
+| Prefix | Environment |
+|--------|-------------|
+| `sk_live_` | Production |
+| `sk_test_` | Development/devnet |
+
+The dashboard shows the first few characters (`prefix`) so you can identify which key is which without exposing the full value.
+
+## Rate Limits
+
+| Tier | Rate Limit |
+|------|-----------|
+| Free | 100 requests/minute |
+| Pro | 1,000 requests/minute |
+
+Rate-limited responses return `429 Too Many Requests` with a `Retry-After` header.
+
+## Troubleshooting
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `401 Unauthorized` | Invalid or revoked key | Check the key is correct and not revoked |
+| `403 Forbidden` | Key doesn't have access to this resource | Verify the key belongs to the correct merchant |
+| `429 Too Many Requests` | Rate limit exceeded | Back off and retry after the `Retry-After` period |
+
+## Next Steps
+
+- [Backend Integration](/docs/guides/backend-integration) — use your API key in a complete server integration
+- [Webhooks](/docs/guides/webhooks) — set up event notifications
+- [SDK Quickstart](/docs/sdk/quickstart) — initialize the client with your key

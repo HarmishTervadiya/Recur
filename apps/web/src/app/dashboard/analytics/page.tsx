@@ -170,17 +170,53 @@ export default function AnalyticsPage() {
     return (
       <div className="space-y-6" role="status" aria-busy="true" aria-live="polite">
         <span className="sr-only">Loading analytics…</span>
-        <div className="motion-safe:animate-pulse bg-recur-border/50 rounded-[14px] h-8 w-40" />
+        {/* Title + subtitle */}
+        <div className="space-y-2">
+          <div className="motion-safe:animate-pulse bg-recur-border/50 rounded-[10px] h-8 w-40" />
+          <div className="motion-safe:animate-pulse bg-recur-border/30 rounded-[8px] h-4 w-72" />
+        </div>
+        {/* Stat cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="motion-safe:animate-pulse bg-recur-border/30 rounded-[14px] h-[80px]" />
+            <div key={i} className="dark-card space-y-2 motion-safe:animate-pulse">
+              <div className="bg-recur-border/30 rounded-[6px] h-3 w-20" />
+              <div className="bg-recur-border/50 rounded-[6px] h-7 w-16" />
+            </div>
           ))}
         </div>
+        {/* Charts row */}
         <div className="grid md:grid-cols-2 gap-6">
-          <div className="motion-safe:animate-pulse bg-recur-border/30 rounded-[14px] h-[180px]" />
-          <div className="motion-safe:animate-pulse bg-recur-border/30 rounded-[14px] h-[180px]" />
+          <div className="dark-card motion-safe:animate-pulse">
+            <div className="bg-recur-border/40 rounded-[8px] h-5 w-36 mb-4" />
+            <div className="flex items-end gap-[3px] h-[120px]">
+              {[...Array(12)].map((_, i) => (
+                <div
+                  key={i}
+                  className="flex-1 bg-recur-border/30 rounded-t-[3px]"
+                  style={{ height: `${20 + Math.random() * 60}%` }}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="dark-card motion-safe:animate-pulse">
+            <div className="bg-recur-border/40 rounded-[8px] h-5 w-40 mb-4" />
+            <div className="flex items-center gap-6">
+              <div className="w-[100px] h-[100px] rounded-full border-[12px] border-recur-border/30" />
+              <div className="space-y-2">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="bg-recur-border/30 rounded-[6px] h-3 w-24" />
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="motion-safe:animate-pulse bg-recur-border/30 rounded-[14px] h-[160px]" />
+        {/* Top plans table */}
+        <div className="dark-card motion-safe:animate-pulse">
+          <div className="bg-recur-border/40 rounded-[8px] h-5 w-24 mb-4" />
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="bg-recur-border/30 rounded-[8px] h-[40px] mb-2" />
+          ))}
+        </div>
       </div>
     );
   }

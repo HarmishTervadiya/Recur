@@ -156,10 +156,31 @@ export default function DashboardOverview() {
         aria-live="polite"
       >
         <span className="sr-only">Loading dashboard…</span>
-        <div className="motion-safe:animate-pulse bg-recur-border/50 rounded-[14px] h-8 w-48" aria-hidden="true" />
+        {/* Title + subtitle */}
+        <div className="space-y-2">
+          <div className="motion-safe:animate-pulse bg-recur-border/50 rounded-[10px] h-8 w-48" aria-hidden="true" />
+          <div className="motion-safe:animate-pulse bg-recur-border/30 rounded-[8px] h-4 w-64" aria-hidden="true" />
+        </div>
+        {/* Stat cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4" aria-hidden="true">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="motion-safe:animate-pulse bg-recur-border/30 rounded-[14px] h-[140px]" />
+            <div key={i} className="dark-card space-y-3 motion-safe:animate-pulse">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-[10px] bg-recur-border/40" />
+                <div className="bg-recur-border/40 rounded-[6px] h-4 w-16" />
+              </div>
+              <div className="bg-recur-border/50 rounded-[6px] h-7 w-12" />
+            </div>
+          ))}
+        </div>
+        {/* Recent apps section */}
+        <div className="dark-card space-y-3" aria-hidden="true">
+          <div className="flex justify-between items-center">
+            <div className="motion-safe:animate-pulse bg-recur-border/50 rounded-[8px] h-5 w-28" />
+            <div className="motion-safe:animate-pulse bg-recur-border/30 rounded-[8px] h-4 w-16" />
+          </div>
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="motion-safe:animate-pulse bg-recur-border/30 rounded-[10px] h-[52px]" />
           ))}
         </div>
       </div>

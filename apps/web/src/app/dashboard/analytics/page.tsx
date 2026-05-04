@@ -176,7 +176,11 @@ export default function AnalyticsPage() {
             <div key={i} className="motion-safe:animate-pulse bg-recur-border/30 rounded-[14px] h-[80px]" />
           ))}
         </div>
-        <div className="motion-safe:animate-pulse bg-recur-border/30 rounded-[14px] h-[200px]" />
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="motion-safe:animate-pulse bg-recur-border/30 rounded-[14px] h-[180px]" />
+          <div className="motion-safe:animate-pulse bg-recur-border/30 rounded-[14px] h-[180px]" />
+        </div>
+        <div className="motion-safe:animate-pulse bg-recur-border/30 rounded-[14px] h-[160px]" />
       </div>
     );
   }

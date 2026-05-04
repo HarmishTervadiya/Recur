@@ -26,7 +26,9 @@ export function Navbar() {
       }`}
     >
       <div className="max-w-container mx-auto px-6 flex justify-between items-center">
-        <RecurLogoIcon size={28} />
+        <Link href="/">
+          <RecurLogoIcon size={28} />
+        </Link>
         <div className="hidden md:flex items-center bg-recur-surface/80 border border-recur-border rounded-full px-1.5 py-1.5 gap-1 backdrop-blur-sm">
           <a
             href="#how-it-works"

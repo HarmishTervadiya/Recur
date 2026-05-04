@@ -87,7 +87,16 @@ export default function ApiKeysPage() {
       <div className="space-y-6" role="status" aria-busy="true" aria-live="polite">
         <span className="sr-only">Loading API keys…</span>
         <div className="motion-safe:animate-pulse bg-recur-border/50 rounded-[14px] h-8 w-32" aria-hidden="true" />
-        <div className="motion-safe:animate-pulse bg-recur-border/30 rounded-[14px] h-[200px]" aria-hidden="true" />
+        <div className="dark-card space-y-3" aria-hidden="true">
+          <div className="flex justify-between items-center">
+            <div className="motion-safe:animate-pulse bg-recur-border/50 rounded-[8px] h-5 w-24" />
+            <div className="motion-safe:animate-pulse bg-recur-border/50 rounded-[8px] h-8 w-28" />
+          </div>
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="motion-safe:animate-pulse bg-recur-border/30 rounded-[10px] h-[56px]" />
+          ))}
+        </div>
+        <div className="motion-safe:animate-pulse bg-recur-border/30 rounded-[14px] h-[120px]" aria-hidden="true" />
       </div>
     );
   }

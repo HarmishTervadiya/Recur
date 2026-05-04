@@ -1,112 +1,127 @@
 ---
 title: Plans
-description: Create and manage subscription plans via the SDK.
+description: Create and manage subscription plans, list subscriptions, and query payment history.
 ---
 
 # Plans
 
-Plans define the billing terms for subscriptions — amount, interval, and metadata.
-They're created through the REST API and stored in the Recur database.
+Plan management and subscription queries are handled via the Recur REST API through `RecurClient`.
 
-The `getPlan` and `getPlans` methods are public (no auth). `createPlan` and
-`listPlans` require an API key — pass it to `new RecurClient({ apiKey })`.
+## `getPlans(appId)`
 
-All methods return an `ApiResponse<T>`:
+List all plans for an app. No authentication required.
 
-```typescript
-interface ApiResponse<T> {
-  success: boolean;
-  data: T | null;
-  error: { code: string; message: string } | null;
-}
+```ts
+const plans: PlanInfo[] = await recur.getPlans("app_xxx");
 ```
 
-Always check `res.success` before reading `res.data`.
+## `getPlan(appId, planId)`
 
-## Create a plan (merchant)
+Fetch a single plan by ID.
 
-```typescript title="create-plan.ts"
-const recur = new RecurClient({
-  rpcUrl: "https://api.devnet.solana.com",
-  apiBaseUrl: "https://api.recur.so",
-  apiKey: process.env.RECUR_API_KEY,
-});
+```ts
+const plan: PlanInfo = await recur.getPlan("app_xxx", "plan_abc123");
 
-const res = await recur.createPlan({
-  appId,
+console.log(plan.amountBaseUnits); // "5000000"
+console.log(plan.intervalSeconds); // 2592000
+console.log(plan.planSeed);        // "0100000000000000"
+```
+
+## `listPlans(appId)`
+
+Alias for `getPlans`. Returns the same `PlanInfo[]`.
+
+```ts
+const plans = await recur.listPlans("app_xxx");
+```
+
+## `createPlan(options)`
+
+Create a new plan. Requires an API key or merchant authentication.
+
+```ts
+const plan = await recur.createPlan({
+  appId: "app_xxx",
   name: "Pro Monthly",
-  description: "Full access to all features",
-  amountBaseUnits: 5_000_000, // $5.00 USDC, as a number
+  amount: 9_990_000, // $9.99 USDC
   intervalSeconds: 2_592_000, // 30 days
 });
-
-if (res.success && res.data) {
-  console.log(res.data.id);       // "cmoe0k7nj001fcemltjf3uhca"
-  console.log(res.data.planSeed); // "0100000000000000"
-}
 ```
 
-The returned `planSeed` is the 8-byte hex string used to derive subscription
-PDAs. Pass it to `buildSubscribeTransaction` when subscribers sign up.
+## `listSubscriptions(appId, options?)`
 
-## List plans (merchant)
+List subscriptions for an app. Requires API key (merchant scope).
 
-```typescript
-const res = await recur.listPlans(appId);
-
-if (res.success && res.data) {
-  for (const plan of res.data) {
-    console.log(`${plan.name}: $${Number(plan.amountBaseUnits) / 1e6}/mo`);
-  }
-}
+```ts
+const subscriptions: SubscriptionInfo[] = await recur.listSubscriptions("app_xxx", {
+  status: "active", // optional filter
+});
 ```
 
-## Public: list active plans
+## `getPaymentHistory(appId, options?)`
 
-No API key required — use this from a subscriber-facing client.
+Fetch payment transaction history for an app.
 
-```typescript
-const res = await recur.getPlans(appId);
+```ts
+const payments: TransactionInfo[] = await recur.getPaymentHistory("app_xxx", {
+  limit: 50,
+  offset: 0,
+});
 ```
 
-## Public: get a single plan
+## `getMySubscriptions(authToken, options?)`
 
-```typescript
-const res = await recur.getPlan(appId, planId);
+Fetch the authenticated subscriber's own subscriptions across all apps.
+
+```ts
+const token = await recur.authenticate(wallet);
+const mySubs = await recur.getMySubscriptions(token);
 ```
 
-The response includes the merchant wallet via the nested `app.merchant` field —
-useful for building a subscribe transaction without an extra round trip.
+## `registerSubscription(options, authToken)`
 
-## Plan fields
+Manually register a subscription with the API after on-chain creation. The high-level `subscribe()` calls this automatically — use this only if you built and sent the transaction yourself.
 
-| Field | Type | Description |
-|---|---|---|
-| `id` | `string` | Unique plan identifier |
-| `appId` | `string` | The app this plan belongs to |
-| `name` | `string` | Display name |
-| `description` | `string \| null` | Optional description |
-| `amountBaseUnits` | `string` | Amount in USDC base units (6 decimals). Returned as a string for big-int safety |
-| `intervalSeconds` | `number` | Billing interval in seconds |
-| `planSeed` | `string` | 16-char hex seed for PDA derivation |
-| `isActive` | `boolean` | Whether the plan accepts new subscriptions |
-| `createdAt` | `string` | ISO 8601 timestamp |
-| `app` | `object?` | Optional nested `{ name, merchant: { id, name, walletAddress } }` |
+```ts
+await recur.registerSubscription(
+  {
+    subscriptionPda: pda.toBase58(),
+    planId: "plan_abc123",
+    transactionSignature: sig,
+  },
+  token,
+);
+```
 
-`createPlan` accepts `amountBaseUnits` as a `number`; on read it's returned as a
-`string` so you don't lose precision on values above `2^53`.
+## On-chain account data
 
-## Plan seed
+### `getSubscriptionAccount(subscriptionPda)`
 
-Each plan gets a unique 8-byte seed derived from its database ID. This seed is
-used in PDA derivation: `["subscription", subscriber, merchant, plan_seed]`.
+Deserializes the on-chain subscription PDA data.
 
-The seed ensures a subscriber can have separate subscriptions to different plans
-from the same merchant — each plan produces a different PDA.
+```ts
+import { PublicKey } from "@solana/web3.js";
 
-```typescript
-import { planSeedToBuffer, findSubscriptionPda } from "@recur/sdk";
+const data: OnChainSubscription = await recur.getSubscriptionAccount(
+  new PublicKey("SUBSCRIPTIONPDAxxx..."),
+);
 
-const seedBuf = planSeedToBuffer(plan.planSeed);
-const [pda] = findSubscriptionPda(subscriber, merchant, seedBuf);
+console.log(data.subscriber);         // PublicKey
+console.log(data.merchant);           // PublicKey
+console.log(data.amount);             // BN (base units)
+console.log(data.intervalSeconds);    // number
+console.log(data.lastPaymentTimestamp); // number (unix)
+console.log(data.cancelPending);      // boolean
+```
+
+### `deriveSubscriptionPda(subscriber, merchant, planSeedHex)`
+
+Derive the PDA address without building a transaction.
+
+```ts
+const { pda, bump } = recur.deriveSubscriptionPda(
+  "SUBSCRIBERxxx...",
+  "MERCHANTxxx...",
+  "0100000000000000",
+);
 ```

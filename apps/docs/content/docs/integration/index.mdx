@@ -3,23 +3,41 @@ title: Integration
 description: Drop-in React components, hooks, and server adapters. Add subscriptions to your app in three steps.
 ---
 
+<Callout type="warn">
+**`@recur/react` and `@recur/server` are planned packages — currently in development.** Use `@recur/sdk` directly for all functionality. See the [SDK Quickstart](/docs/sdk/quickstart) for working examples.
+</Callout>
+
 # Integration
 
-Recur ships three layers so you can integrate at exactly the level of control you want — no Web3 knowledge required.
+Recur will ship three layers so you can integrate at exactly the level of control you want — no Web3 knowledge required.
 
-| Layer | Package | Use when |
-|---|---|---|
-| **Components** | `@recur/react` | You want a button or modal that just works |
-| **Hooks** | `@recur/react` | You want to keep your own UI but skip the wallet/transaction plumbing |
-| **Server** | `@recur/server` | You want to verify webhooks in your backend |
-| Advanced | `@recur/sdk` | You want raw transaction builders and full control |
+| Layer | Package | Status | Use when |
+|---|---|---|---|
+| **Components** | `@recur/react` | Coming Soon | You want a button or modal that just works |
+| **Hooks** | `@recur/react` | Coming Soon | You want to keep your own UI but skip the wallet/transaction plumbing |
+| **Server** | `@recur/server` | Coming Soon | You want framework-specific webhook middleware |
+| **SDK** | `@recur/sdk` | **Available now** | Raw transaction builders, webhook verification, full control |
 
-## Three-step setup
+## Available today with `@recur/sdk`
+
+```bash
+npm install @recur/sdk @solana/web3.js @solana/spl-token
+```
+
+The SDK provides all the building blocks:
+- `RecurClient` — subscribe, cancel, reapprove, authenticate, plan queries
+- `verifyWebhookSignature` / `parseWebhookPayload` — webhook verification
+- `signAndSend` — transaction helper
+- Typed errors for every failure mode
+
+See the **[SDK documentation](/docs/sdk/quickstart)** for complete usage.
+
+## Planned three-step setup (when `@recur/react` ships)
 
 ### 1. Install
 
 ```bash
-bun add @recur/react @recur/server
+npm install @recur/react @recur/server
 ```
 
 ### 2. Wrap your app
@@ -50,12 +68,10 @@ import { SubscribeButton } from "@recur/react";
 </SubscribeButton>
 ```
 
-That's it. The button handles wallet connection, sign-in, USDC delegation, and registration with the Recur API. On success the merchant's webhook receives `subscription_created`.
-
 ## Where to next
 
-- **[Components](/docs/integration/components)** — every drop-in component, props, and the opt-in stylesheet
-- **[Hooks](/docs/integration/hooks)** — `useSubscribe`, `useMySubscriptions`, `useCancelSubscription`, `useReapprove`, `usePlan`, `usePlans` for headless UIs
-- **[Server-side helpers](/docs/integration/server-side)** — `RecurClient.authenticate / subscribe / cancel / reapprove` for backend or Node scripts
-- **[Webhook verification](/docs/integration/server)** — verify signed webhooks with one middleware call
-- **[Advanced / Custom Web3](/docs/sdk)** — raw `@recur/sdk` builders for full control over the transaction
+- **[SDK Quickstart](/docs/sdk/quickstart)** — get started now with `@recur/sdk`
+- **[Components](/docs/integration/components)** — planned drop-in components (roadmap)
+- **[Hooks](/docs/integration/hooks)** — planned headless hooks (roadmap)
+- **[Server-side helpers](/docs/integration/server-side)** — `RecurClient` usage from backends
+- **[Webhook verification](/docs/integration/server)** — verify webhooks using `@recur/sdk`

@@ -1,0 +1,112 @@
+---
+title: Authentication
+description: Wallet-based authentication using the SDK — nonce, sign, verify, JWT.
+---
+
+# Authentication
+
+Recur uses wallet-based authentication. The subscriber signs a nonce message to prove wallet ownership and receives a JWT for authenticated API calls.
+
+## `authenticate` (high-level)
+
+One call handles the full flow: request nonce → sign message → verify → return JWT.
+
+```ts
+import { RecurClient } from "@recur/sdk";
+
+const recur = new RecurClient({
+  rpcUrl: "https://api.devnet.solana.com",
+  apiBaseUrl: "https://api.recur.so",
+});
+
+const token = await recur.authenticate(wallet);
+// token is a JWT string — use in Authorization header
+```
+
+The `wallet` must implement `RecurWallet`:
+
+```ts
+interface RecurWallet {
+  publicKey: PublicKey;
+  signTransaction<T extends Transaction | VersionedTransaction>(tx: T): Promise<T>;
+  signMessage(message: Uint8Array): Promise<Uint8Array>;
+}
+```
+
+Standard Solana wallet adapters satisfy this interface.
+
+## Manual flow
+
+If you need more control (e.g., caching nonces, custom error handling):
+
+### 1. Request nonce
+
+```ts
+const response = await fetch(`${apiBaseUrl}/auth/nonce`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ walletAddress: wallet.publicKey.toBase58() }),
+});
+const { nonce, message } = await response.json();
+```
+
+### 2. Sign message
+
+```ts
+const encoder = new TextEncoder();
+const signature = await wallet.signMessage(encoder.encode(message));
+```
+
+### 3. Verify and get JWT
+
+```ts
+const verifyRes = await fetch(`${apiBaseUrl}/auth/verify`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    walletAddress: wallet.publicKey.toBase58(),
+    message,
+    signature: Buffer.from(signature).toString("base64"),
+  }),
+});
+const { token, refreshToken } = await verifyRes.json();
+```
+
+## Using the JWT
+
+Pass the token in the `Authorization` header for authenticated endpoints:
+
+```ts
+const res = await fetch(`${apiBaseUrl}/subscriptions/me`, {
+  headers: { Authorization: `Bearer ${token}` },
+});
+```
+
+## Refreshing tokens
+
+```ts
+const res = await fetch(`${apiBaseUrl}/auth/refresh`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ refreshToken }),
+});
+const { token: newToken, refreshToken: newRefreshToken } = await res.json();
+```
+
+## Error handling
+
+`authenticate` throws `AuthError` if the nonce request fails, the wallet rejects signing, or verification fails. It throws `WalletRejectedError` specifically if the user declines the sign prompt.
+
+```ts
+import { AuthError, WalletRejectedError } from "@recur/sdk";
+
+try {
+  const token = await recur.authenticate(wallet);
+} catch (e) {
+  if (e instanceof WalletRejectedError) {
+    // User declined — show retry prompt
+  } else if (e instanceof AuthError) {
+    // Server-side auth failure
+  }
+}
+```

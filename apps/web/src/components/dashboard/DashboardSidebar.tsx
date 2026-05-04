@@ -10,6 +10,8 @@ import { TierBadge } from "./TierBadge";
 const NAV_ITEMS = [
   { label: "Overview", href: "/dashboard", icon: "grid" },
   { label: "Apps", href: "/dashboard/apps", icon: "box" },
+  { label: "Analytics", href: "/dashboard/analytics", icon: "chart" },
+  { label: "API Keys", href: "/dashboard/api-keys", icon: "key" },
   { label: "Settings", href: "/dashboard/settings", icon: "settings" },
 ];
 
@@ -29,6 +31,20 @@ function NavIcon({ icon }: { icon: string }) {
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
           <path d="M2 6h12" stroke="currentColor" strokeWidth="1.5" />
+        </svg>
+      );
+    case "chart":
+      return (
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M2 13V8l3-2 3 3 4-5 2 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M2 14h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      );
+    case "key":
+      return (
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <circle cx="5.5" cy="10.5" r="3" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M8 8l5-5M11 3l2 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     case "settings":

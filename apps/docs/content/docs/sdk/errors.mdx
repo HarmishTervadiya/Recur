@@ -1,0 +1,84 @@
+---
+title: Errors
+description: Error classes thrown by @recur/sdk and how to handle them.
+---
+
+# Errors
+
+All errors thrown by `@recur/sdk` extend the base `RecurError` class. Use `instanceof` to handle specific cases.
+
+## Error classes
+
+| Class | When thrown |
+|---|---|
+| `RecurError` | Base class for all SDK errors |
+| `WalletRejectedError` | User declined the wallet prompt (sign or signMessage) |
+| `InsufficientFundsError` | Subscriber's USDC balance can't cover the payment |
+| `DelegationExhaustedError` | SPL Token approval used up — call `reapprove()` |
+| `PlanInactiveError` | Plan was disabled or archived by the merchant |
+| `SubscriptionAlreadyExistsError` | Subscriber already has an active subscription on this plan |
+| `NetworkError` | RPC node or Recur API unreachable |
+| `AuthError` | JWT invalid, expired, or auth flow failed |
+
+## Handling errors
+
+```ts
+import {
+  RecurError,
+  WalletRejectedError,
+  InsufficientFundsError,
+  DelegationExhaustedError,
+  PlanInactiveError,
+  SubscriptionAlreadyExistsError,
+  NetworkError,
+  AuthError,
+} from "@recur/sdk";
+
+try {
+  await recur.subscribe(wallet, options, token);
+} catch (e) {
+  if (e instanceof WalletRejectedError) {
+    // User cancelled — show a retry button
+  } else if (e instanceof InsufficientFundsError) {
+    // Prompt user to fund their wallet
+  } else if (e instanceof DelegationExhaustedError) {
+    // Call reapprove() to top up delegation
+  } else if (e instanceof PlanInactiveError) {
+    // Plan no longer available
+  } else if (e instanceof SubscriptionAlreadyExistsError) {
+    // Redirect to manage page
+  } else if (e instanceof NetworkError) {
+    // Retry with backoff
+  } else if (e instanceof AuthError) {
+    // Re-authenticate
+  } else if (e instanceof RecurError) {
+    // Unknown SDK error
+  }
+}
+```
+
+## `mapError`
+
+The SDK exports a `mapError` utility that converts raw errors (RPC failures, HTTP errors) into typed `RecurError` subclasses:
+
+```ts
+import { mapError } from "@recur/sdk";
+
+try {
+  // raw transaction or fetch call
+} catch (e) {
+  throw mapError(e); // returns appropriate RecurError subclass
+}
+```
+
+## Error properties
+
+All `RecurError` instances have:
+
+```ts
+class RecurError extends Error {
+  name: string;    // e.g. "WalletRejectedError"
+  message: string; // human-readable description
+  cause?: unknown; // original error, if wrapped
+}
+```

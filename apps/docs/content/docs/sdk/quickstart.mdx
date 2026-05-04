@@ -13,19 +13,29 @@ npm install @recur/sdk @solana/web3.js @solana/spl-token
 
 ## Initialize the client
 
-`apiBaseUrl` is required. `programId` and `usdcMint` default to the deployed
-devnet values.
+Use `getClusterDefaults` to get the correct RPC URL, program ID, and USDC mint for your target cluster:
 
 ```typescript title="recur.ts"
-import { RecurClient } from "@recur/sdk";
+import { RecurClient, getClusterDefaults } from "@recur/sdk";
 
+const defaults = getClusterDefaults("devnet");
+// defaults = { rpcUrl, programId, usdcMint }
+
+const recur = new RecurClient({
+  rpcUrl: defaults.rpcUrl,
+  apiBaseUrl: "https://api.recur.so",
+  programId: defaults.programId,   // optional — already the default for devnet
+  usdcMint: defaults.usdcMint,     // optional — already the default for devnet
+  apiKey: process.env.RECUR_API_KEY, // optional, for merchant-authenticated calls
+});
+```
+
+Or provide explicit values:
+
+```typescript
 const recur = new RecurClient({
   rpcUrl: "https://api.devnet.solana.com",
   apiBaseUrl: "https://api.recur.so",
-  // Optional overrides:
-  // programId: "3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx",
-  // usdcMint: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
-  // apiKey: process.env.RECUR_API_KEY, // for merchant-authenticated calls
 });
 ```
 
@@ -35,35 +45,59 @@ Build the instructions that create an on-chain subscription. The subscriber sign
 the resulting transaction in their wallet — no backend signature needed.
 
 ```typescript title="subscribe.ts"
-import { RecurClient } from "@recur/sdk";
-import { Connection, PublicKey, Transaction } from "@solana/web3.js";
+import { RecurClient, getClusterDefaults } from "@recur/sdk";
+import { Connection, Transaction } from "@solana/web3.js";
 
+const defaults = getClusterDefaults("devnet");
 const recur = new RecurClient({
-  rpcUrl: "https://api.devnet.solana.com",
+  rpcUrl: defaults.rpcUrl,
   apiBaseUrl: "https://api.recur.so",
 });
 
-// Plan + merchant details (from your backend / the Recur API)
-const planId = "cmoe0k7nj001fcemltjf3uhca";
-const merchantWallet = "MERCHANT_WALLET_ADDRESS";
-const planSeed = "0100000000000000"; // hex-encoded 8-byte plan seed
-const amount = 5_000_000;             // $5.00 USDC
-const intervalSeconds = 2_592_000;    // 30 days
+// Plan details (from your backend / the Recur API)
+const plan = await recur.getPlan("app_xxx", "plan_abc123");
 
-const { subscriptionPda, instructions } = recur.buildSubscribeTransaction(
-  subscriberWallet.publicKey,
-  { planId, merchantWallet, planSeed, amount, intervalSeconds },
+const { subscriptionPda, instructions, bump } = recur.buildSubscribeTransaction(
+  wallet.publicKey,
+  {
+    planId: plan.id,
+    merchantWallet: plan.app.merchant.walletAddress,
+    planSeed: plan.planSeed,
+    amount: Number(plan.amountBaseUnits),
+    intervalSeconds: plan.intervalSeconds,
+  },
 );
 
 const tx = new Transaction().add(...instructions);
-const signature = await sendTransaction(tx, connection);
-await connection.confirmTransaction(signature, "confirmed");
+const signed = await wallet.signTransaction(tx);
+const sig = await connection.sendRawTransaction(signed.serialize());
+await connection.confirmTransaction(sig, "confirmed");
 ```
 
 The returned `instructions` array contains exactly two instructions:
 
 1. **SPL Token `approve`** — delegates `amount × delegationCycles` (default 12) to the Subscription PDA
 2. **`initialize_subscription`** — creates the on-chain PDA with amount, interval, and plan seed
+
+## Or use the high-level `subscribe` method
+
+```typescript
+const token = await recur.authenticate(wallet);
+const { subscriptionPda, signature, subscription } = await recur.subscribe(
+  wallet,
+  {
+    appId: "app_xxx",
+    planId: plan.id,
+    merchantWallet: plan.app.merchant.walletAddress,
+    planSeed: plan.planSeed,
+    amount: Number(plan.amountBaseUnits),
+    intervalSeconds: plan.intervalSeconds,
+  },
+  token,
+);
+```
+
+This builds, signs, confirms, and registers the subscription in one call.
 
 ## What happens next
 
@@ -80,9 +114,14 @@ When the SPL approve runs out (after `delegationCycles` payments), call
 [`buildReapproveTransaction`](/docs/sdk/subscribe#re-approving-an-exhausted-delegation)
 to top it up — no on-chain subscription state is touched.
 
+<Callout type="info">
+**`@recur/react` — Coming Soon.** A React package with `RecurProvider`, `SubscribeButton`, and hooks is planned. For now, use `@recur/sdk` directly as shown above.
+</Callout>
+
 ## Next steps
 
 - [Subscribe](/docs/sdk/subscribe) — full subscribe API reference
 - [Cancel](/docs/sdk/cancel) — let subscribers cancel
 - [Webhooks](/docs/sdk/webhooks) — handle payment notifications in your backend
 - [Plans](/docs/sdk/plans) — create and manage plans via the API
+- [Errors](/docs/sdk/errors) — handle errors gracefully

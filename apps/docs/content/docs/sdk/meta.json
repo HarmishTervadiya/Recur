@@ -1,0 +1,3 @@
+{
+  "pages": ["quickstart", "subscribe", "cancel", "plans", "webhooks", "authentication", "errors"]
+}

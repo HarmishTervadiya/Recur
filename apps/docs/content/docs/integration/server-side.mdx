@@ -5,7 +5,7 @@ description: Drive subscriptions from a backend or Node script using RecurClient
 
 # Server-side helpers
 
-The same four high-level operations available to the React hooks are exposed directly on `RecurClient`. Use these from a Node service, an API route, a test fixture, or a custom signing flow.
+The same high-level operations available in the browser are exposed directly on `RecurClient`. Use these from a Node service, an API route, a test fixture, or a custom signing flow.
 
 ```ts
 import { RecurClient, getClusterDefaults } from "@recur/sdk";
@@ -18,7 +18,19 @@ const client = new RecurClient({
 });
 ```
 
-All four methods take a `RecurWallet` (anything with `publicKey`, `signTransaction`, and `signMessage`). A keypair on the server can implement this interface directly; a browser passes the wallet adapter.
+All methods take a `RecurWallet` (anything with `publicKey`, `signTransaction`, and `signMessage`). A keypair on the server can implement this interface directly; a browser passes the wallet adapter.
+
+```ts
+import { Keypair } from "@solana/web3.js";
+import type { RecurWallet } from "@recur/sdk";
+
+const keypair = Keypair.fromSecretKey(/* ... */);
+const serverWallet: RecurWallet = {
+  publicKey: keypair.publicKey,
+  signTransaction: async (tx) => { tx.sign(keypair); return tx; },
+  signMessage: async (msg) => nacl.sign.detached(msg, keypair.secretKey),
+};
+```
 
 ## `client.authenticate(wallet)`
 
@@ -26,7 +38,7 @@ All four methods take a `RecurWallet` (anything with `publicKey`, `signTransacti
 const token = await client.authenticate(wallet);
 ```
 
-Runs nonce → `signMessage` → verify against `/auth/verify` and returns a JWT. Cache it yourself (the React provider does this for you in the browser).
+Runs nonce → `signMessage` → verify against `/auth/verify` and returns a JWT string.
 
 ## `client.subscribe(wallet, options, token)`
 
@@ -58,6 +70,9 @@ await client.cancel(wallet, {
 });
 ```
 
+- `"request"` → `request_cancel` instruction (prepaid period honored)
+- `"instant"` → `subscriber_cancel` instruction (immediate close)
+
 ## `client.reapprove(wallet, options)`
 
 ```ts
@@ -85,4 +100,4 @@ Every method throws a typed subclass of `RecurError`:
 | `NetworkError` | RPC or API unreachable |
 | `AuthError` | JWT invalid/expired |
 
-Check with `instanceof` — the React `<ErrorMessage>` component does this automatically.
+Check with `instanceof`. See the full [error reference](/docs/sdk/errors).

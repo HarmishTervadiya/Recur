@@ -1,171 +1,139 @@
 ---
 title: Webhooks
-description: Verify and handle payment event notifications.
+description: Verify and parse Recur webhook payloads using @recur/sdk.
 ---
 
 # Webhooks
 
-Recur sends webhook notifications to your registered endpoint whenever subscription
-events occur. All payloads are signed with HMAC-SHA256 for verification.
+Recur posts signed JSON to your webhook URL on every subscription event. Use `verifyWebhookSignature` and `parseWebhookPayload` from `@recur/sdk` to validate and parse incoming requests.
+
+## Signing scheme
+
+| Header | Value |
+|---|---|
+| `X-Recur-Signature` | `sha256=` + hex HMAC of `"${timestamp}.${rawBody}"` |
+| `X-Recur-Timestamp` | Unix seconds at dispatch time |
+
+The HMAC key is your per-app webhook secret from the Recur dashboard. Requests older than 5 minutes (default tolerance) are rejected.
+
+## `verifyWebhookSignature`
+
+```ts
+import { verifyWebhookSignature } from "@recur/sdk";
+
+// Throws if signature is invalid or timestamp is stale
+verifyWebhookSignature(
+  rawBody,        // string — raw request body
+  signature,      // string — X-Recur-Signature header value
+  timestamp,      // string — X-Recur-Timestamp header value
+  secret,         // string — your webhook secret
+  toleranceSec?,  // number — optional, default 300 (5 min)
+);
+```
+
+## `parseWebhookPayload`
+
+```ts
+import { parseWebhookPayload } from "@recur/sdk";
+import type { WebhookPayload } from "@recur/sdk";
+
+const event: WebhookPayload = parseWebhookPayload(rawBody);
+```
+
+## Express example
+
+```ts
+import express from "express";
+import { verifyWebhookSignature, parseWebhookPayload } from "@recur/sdk";
+
+const app = express();
+const secret = process.env.RECUR_WEBHOOK_SECRET!;
+
+app.post(
+  "/webhooks/recur",
+  express.raw({ type: "application/json" }),
+  (req, res) => {
+    const body = req.body.toString();
+    const signature = req.headers["x-recur-signature"] as string;
+    const timestamp = req.headers["x-recur-timestamp"] as string;
+
+    try {
+      verifyWebhookSignature(body, signature, timestamp, secret);
+    } catch {
+      return res.status(401).send("Invalid signature");
+    }
+
+    const event = parseWebhookPayload(body);
+
+    switch (event.type) {
+      case "payment_success":
+        // Grant access, send receipt
+        break;
+      case "payment_failed":
+        // Notify subscriber, retry logic
+        break;
+      case "cancel_finalized":
+        // Revoke access
+        break;
+    }
+
+    res.status(200).end();
+  },
+);
+```
+
+## Next.js App Router example
+
+```ts title="app/api/webhooks/recur/route.ts"
+import { verifyWebhookSignature, parseWebhookPayload } from "@recur/sdk";
+
+export async function POST(req: Request) {
+  const body = await req.text();
+  const signature = req.headers.get("x-recur-signature")!;
+  const timestamp = req.headers.get("x-recur-timestamp")!;
+  const secret = process.env.RECUR_WEBHOOK_SECRET!;
+
+  try {
+    verifyWebhookSignature(body, signature, timestamp, secret);
+  } catch {
+    return new Response("Invalid signature", { status: 401 });
+  }
+
+  const event = parseWebhookPayload(body);
+
+  switch (event.type) {
+    case "subscription_created":
+      // Provision user account
+      break;
+    case "payment_success":
+      // Extend access period
+      break;
+    case "cancel_requested":
+      // Show "cancelling" state in UI
+      break;
+  }
+
+  return Response.json({ ok: true });
+}
+```
 
 ## Event types
 
-| Event | Fired when |
+| Event | Trigger |
 |---|---|
-| `subscription_created` | A new subscription is registered (on-chain or via API) |
-| `payment_success` | A recurring payment is collected successfully |
-| `payment_failed` | A payment attempt fails (insufficient funds, revoked delegation) |
-| `cancel_requested` | `request_cancel` is called — subscription remains active until paid period ends |
-| `cancel_finalized` | `finalize_cancel` (or `subscriber_cancel`) closes the PDA cleanly |
-| `cancel_forced` | The Keeper force-closes the PDA after delegation was revoked |
+| `subscription_created` | Subscription registered after on-chain initialize |
+| `payment_success` | Keeper pulled and confirmed a payment |
+| `payment_failed` | Payment attempt failed (insufficient funds, delegation exhausted) |
+| `cancel_requested` | `request_cancel` called by subscriber or merchant |
+| `cancel_finalized` | Prepaid period elapsed, PDA closed |
+| `cancel_forced` | Merchant called `force_cancel` |
+| `delegation_revoked` | Subscriber manually revoked SPL Token delegation |
+| `platform_pro_activated` | Platform pro subscription activated |
+| `platform_pro_past_due` | Platform pro payment overdue |
+| `platform_pro_downgraded` | Platform pro downgraded due to non-payment |
 
-`delegation_revoked` is reserved for future use and is not currently dispatched.
+## Retry policy
 
-## Payload format
-
-```json
-{
-  "event": "payment_success",
-  "timestamp": "2026-04-25T07:24:35.362Z",
-  "data": {
-    "subscriptionId": "cmoe0k7nj001fcemltjf3uhca",
-    "subscriptionPda": "AZUE5JSPGXgPC3ecXFT9AUxrDa8ZagkmhySEr9HaiEcK",
-    "txSignature": "5q2EXnJ2Ukafj...",
-    "amountGross": "5000000",
-    "platformFee": "62500",
-    "amountNet": "4937500",
-    "fromWallet": "...",
-    "toWallet": "...",
-    "confirmedAt": "2026-04-25T07:24:35.362Z"
-  }
-}
-```
-
-The exact `data` shape depends on the event — `payment_*` events include amounts and
-tx signatures; `cancel_*` events include `cancelType` and `confirmedAt`;
-`subscription_created` includes `planId` and `subscriberWallet`.
-
-## Signature verification
-
-Every webhook request includes two headers:
-
-| Header | Description |
-|---|---|
-| `X-Recur-Signature` | `sha256=<hex>` — HMAC-SHA256 digest with `sha256=` prefix |
-| `X-Recur-Timestamp` | Unix timestamp (seconds) when the payload was signed |
-
-The HMAC is computed over `${timestamp}.${body}` using your webhook secret as the key.
-
-### Using the SDK
-
-```typescript title="webhook-handler.ts"
-import {
-  verifyWebhookSignature,
-  parseWebhookPayload,
-} from "@recur/sdk";
-
-app.post("/webhooks/recur", (req, res) => {
-  const signature = req.headers["x-recur-signature"] as string;
-  const timestamp = req.headers["x-recur-timestamp"] as string;
-  const body = JSON.stringify(req.body);
-
-  const isValid = verifyWebhookSignature(
-    body,
-    signature,
-    timestamp,
-    process.env.RECUR_WEBHOOK_SECRET!,
-    300, // toleranceSec — reject payloads older than 5 minutes
-  );
-
-  if (!isValid) {
-    return res.status(401).json({ error: "Invalid signature" });
-  }
-
-  const payload = parseWebhookPayload(body);
-  if (!payload) {
-    return res.status(400).json({ error: "Invalid payload" });
-  }
-
-  switch (payload.event) {
-    case "payment_success":
-      // Grant access, send receipt, update DB
-      break;
-    case "payment_failed":
-      // Send dunning email, flag account
-      break;
-    case "cancel_requested":
-      // Soft-cancel: subscription still active until paid period ends
-      break;
-    case "cancel_finalized":
-    case "cancel_forced":
-      // Hard-cancel: revoke access immediately
-      break;
-  }
-
-  res.status(200).json({ received: true });
-});
-```
-
-`verifyWebhookSignature` takes positional arguments:
-
-```typescript
-verifyWebhookSignature(
-  body: string,
-  signature: string,
-  timestamp: string,
-  secret: string,
-  toleranceSec?: number, // default 300
-): boolean;
-```
-
-It strips the `sha256=` prefix from the signature header and performs a
-constant-time comparison.
-
-### Manual verification
-
-If you're not using the SDK, verify the signature manually:
-
-```typescript
-import { createHmac, timingSafeEqual } from "crypto";
-
-function verify(body: string, signature: string, timestamp: string, secret: string): boolean {
-  const expected = createHmac("sha256", secret)
-    .update(`${timestamp}.${body}`)
-    .digest("hex");
-
-  // The header value is "sha256=<hex>" — strip the prefix before comparing.
-  const sig = signature.replace(/^sha256=/, "");
-  if (sig.length !== expected.length) return false;
-
-  return timingSafeEqual(
-    Buffer.from(sig, "hex"),
-    Buffer.from(expected, "hex"),
-  );
-}
-```
-
-## Timestamp tolerance
-
-The SDK rejects payloads where the timestamp is older than `toleranceSec` (default:
-300 seconds / 5 minutes). This prevents replay attacks.
-
-If your server's clock is significantly skewed, increase the tolerance — but keep it
-under 10 minutes for security.
-
-## Retry behavior
-
-Failed webhook deliveries are retried with exponential backoff:
-
-| Attempt | Delay |
-|---|---|
-| 1 | 1 minute |
-| 2 | 5 minutes |
-| 3 | 30 minutes |
-| 4 | 2 hours |
-| 5 | 12 hours |
-
-After 5 failed attempts, the delivery is marked as `failed`. You can view delivery
-status in the merchant dashboard.
-
-A delivery is considered successful when your endpoint returns a `2xx` status code.
-The dispatcher times out individual attempts at 5 seconds.
+Recur retries failed deliveries at 1m, 5m, 30m, 2h, 12h. Your endpoint should:
+- Respond `2xx` within 5 seconds
+- Deduplicate on `event.data.id`

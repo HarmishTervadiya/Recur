@@ -21,14 +21,6 @@ interface MerchantProfile {
   logoUrl: string | null;
 }
 
-interface ApiKey {
-  id: string;
-  prefix: string;
-  label: string | null;
-  lastUsedAt: string | null;
-  createdAt: string;
-}
-
 interface FieldProps {
   id: string;
   label: string;
@@ -98,12 +90,6 @@ export default function SettingsPage() {
   const [businessName, setBusinessName] = useState("");
   const [businessUrl, setBusinessUrl] = useState("");
 
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
-  const [creatingKey, setCreatingKey] = useState(false);
-  const [newKeySecret, setNewKeySecret] = useState<string | null>(null);
-  const [copiedKey, setCopiedKey] = useState(false);
-  const [revokingKey, setRevokingKey] = useState<ApiKey | null>(null);
-  const [revoking, setRevoking] = useState(false);
 
   const [emailError, setEmailError] = useState("");
   const [businessUrlError, setBusinessUrlError] = useState("");
@@ -111,7 +97,6 @@ export default function SettingsPage() {
   const [phoneError, setPhoneError] = useState("");
   const [businessNameError, setBusinessNameError] = useState("");
   const { toast } = useToast();
-  const revokeBtnRef = useRef<HTMLButtonElement>(null);
 
   const fetchProfile = useCallback(async (signal?: AbortSignal) => {
     const res = await apiClient<MerchantProfile>("/merchant/me");
@@ -127,18 +112,11 @@ export default function SettingsPage() {
     setLoading(false);
   }, []);
 
-  const fetchApiKeys = useCallback(async (signal?: AbortSignal) => {
-    const res = await apiClient<ApiKey[]>("/merchant/api-keys");
-    if (signal?.aborted) return;
-    if (res.success && res.data) setApiKeys(res.data);
-  }, []);
-
   useEffect(() => {
     const controller = new AbortController();
     fetchProfile(controller.signal);
-    fetchApiKeys(controller.signal);
     return () => controller.abort();
-  }, [fetchProfile, fetchApiKeys]);
+  }, [fetchProfile]);
 
   const handleSaveProfile = useCallback(async () => {
     setEmailError("");
@@ -195,50 +173,6 @@ export default function SettingsPage() {
     setSaving(false);
   }, [name, email, phone, businessName, businessUrl, toast]);
 
-  const handleCreateApiKey = useCallback(async () => {
-    setCreatingKey(true);
-    setNewKeySecret(null);
-    const res = await apiClient<{ id: string; key: string }>(
-      "/merchant/api-keys",
-      { method: "POST" },
-    );
-    if (res.success && res.data) {
-      setNewKeySecret(res.data.key);
-      toast("success", "API key created — copy it now");
-      fetchApiKeys();
-    } else {
-      toast("error", res.error?.message ?? "Failed to create API key");
-    }
-    setCreatingKey(false);
-  }, [fetchApiKeys, toast]);
-
-  const handleConfirmRevoke = useCallback(async () => {
-    if (!revokingKey) return;
-    setRevoking(true);
-    const res = await apiClient(`/merchant/api-keys/${revokingKey.id}`, {
-      method: "DELETE",
-    });
-    if (res.success) {
-      toast("success", "API key revoked");
-      setRevokingKey(null);
-      fetchApiKeys();
-    } else {
-      toast("error", res.error?.message ?? "Failed to revoke API key");
-    }
-    setRevoking(false);
-  }, [revokingKey, fetchApiKeys, toast]);
-
-  const handleCopyKey = useCallback(async () => {
-    if (!newKeySecret) return;
-    try {
-      await navigator.clipboard.writeText(newKeySecret);
-      setCopiedKey(true);
-      toast("success", "Copied to clipboard");
-      setTimeout(() => setCopiedKey(false), 2000);
-    } catch {
-      toast("error", "Could not copy to clipboard");
-    }
-  }, [newKeySecret, toast]);
 
   if (loading) {
     return (
@@ -444,7 +378,7 @@ function ProSubscriptionSection() {
         return;
       }
 
-      const { subscriptionPda, merchantWallet, planSeed, alreadyCancelled } = res.data;
+      const { subscriptionPda, merchantWallet, planSeed, alreadyCancelled, subscriberWallet } = res.data;
 
       if (!merchantWallet || !planSeed) {
         toast("error", "Missing subscription data for cancellation. Please contact support.");
@@ -480,7 +414,9 @@ function ProSubscriptionSection() {
           usdcMint: process.env.NEXT_PUBLIC_USDC_MINT,
           programId: process.env.NEXT_PUBLIC_PROGRAM_ID,
         });
-        const { instructions } = client.buildSubscriberCancelTransaction(publicKey, {
+        const { instructions } = client.buildCancelTransaction(publicKey, {
+          subscriptionPda,
+          subscriberWallet,
           merchantWallet,
           planSeed,
         });
@@ -867,86 +803,27 @@ function ProSubscriptionSection() {
         </form>
       </section>
 
-      {/* API Keys Section */}
+      {/* API Keys — moved to dedicated page */}
       <section
-        aria-labelledby="api-keys-heading"
         className="dark-card motion-safe:animate-page-enter"
         style={{ animationDelay: "60ms" }}
       >
-        <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
-          <h2
-            id="api-keys-heading"
-            className="text-[18px] font-bold text-recur-text-heading"
-          >
-            API Keys
-          </h2>
-          <button
-            onClick={handleCreateApiKey}
-            disabled={creatingKey}
-            className="btn-primary text-[12px] px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {creatingKey ? "Creating…" : "Create Key"}
-          </button>
-        </div>
-
-        {newKeySecret && (
-          <div
-            className="dark-card-elevated border-recur-warning/30 mb-4 motion-safe:animate-page-enter"
-            role="region"
-            aria-label="New API key"
-          >
-            <p className="text-[12px] font-semibold text-recur-warning mb-2">
-              API key created (shown once — copy it now):
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-[15px] font-bold text-recur-text-heading">
+              API Keys
+            </h2>
+            <p className="text-[11px] text-recur-text-dim mt-0.5">
+              Manage your server-side API keys for programmatic access.
             </p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 text-[11px] font-mono text-recur-text-heading bg-recur-base px-3 py-2 rounded-[8px] break-all">
-                {newKeySecret}
-              </code>
-              <button
-                onClick={handleCopyKey}
-                className="btn-secondary text-[11px] px-3 py-1.5 shrink-0"
-              >
-                {copiedKey ? "Copied!" : "Copy"}
-              </button>
-            </div>
           </div>
-        )}
-
-        {apiKeys.length === 0 ? (
-          <p className="text-[13px] text-recur-text-muted">No API keys yet.</p>
-        ) : (
-          <ul className="space-y-2">
-            {apiKeys.map((key) => (
-              <li
-                key={key.id}
-                className="flex items-center justify-between py-3 px-4 bg-recur-base border border-recur-border rounded-[10px] gap-3"
-              >
-                <div className="min-w-0">
-                  <span className="text-[12px] font-mono text-recur-text-heading">
-                    {key.prefix}…
-                  </span>
-                  <div className="text-[10px] text-recur-text-dim mt-0.5">
-                    Created {new Date(key.createdAt).toLocaleDateString()}
-                    {key.lastUsedAt && (
-                      <>
-                        {" · Last used "}
-                        {new Date(key.lastUsedAt).toLocaleDateString()}
-                      </>
-                    )}
-                    {!key.lastUsedAt && " · Never used"}
-                  </div>
-                </div>
-                <button
-                  onClick={() => setRevokingKey(key)}
-                  className="text-[11px] text-recur-text-dim hover:text-recur-error motion-safe:transition-colors px-3 py-1 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-recur-error rounded"
-                  aria-label={`Revoke API key ${key.prefix}`}
-                >
-                  Revoke
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+          <a
+            href="/dashboard/api-keys"
+            className="btn-secondary text-[12px] px-4 py-2"
+          >
+            Manage Keys →
+          </a>
+        </div>
       </section>
 
       {/* Recur Pro Section */}
@@ -959,35 +836,6 @@ function ProSubscriptionSection() {
         <ProSubscriptionSection />
       </section>
 
-      <Modal
-        open={Boolean(revokingKey)}
-        onClose={() => !revoking && setRevokingKey(null)}
-        title="Revoke API Key?"
-        initialFocusRef={revokeBtnRef}
-        description={
-          revokingKey
-            ? `This will permanently revoke the API key starting with "${revokingKey.prefix}". Any service using this key will stop working immediately.`
-            : undefined
-        }
-      >
-        <div className="flex gap-3 mt-2">
-          <button
-            ref={revokeBtnRef}
-            onClick={handleConfirmRevoke}
-            disabled={revoking}
-            className="btn-primary text-[13px] px-5 py-2 disabled:opacity-50 disabled:cursor-not-allowed bg-recur-error border-recur-error text-white hover:brightness-110"
-          >
-            {revoking ? "Revoking…" : "Revoke Key"}
-          </button>
-          <button
-            onClick={() => setRevokingKey(null)}
-            disabled={revoking}
-            className="btn-secondary text-[13px] px-5 py-2"
-          >
-            Cancel
-          </button>
-        </div>
-      </Modal>
     </div>
   );
 }

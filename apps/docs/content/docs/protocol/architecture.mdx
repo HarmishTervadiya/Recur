@@ -1,109 +1,102 @@
 ---
-title: Architecture
-description: On-chain program design — PDAs, instructions, and account layout.
+title: Protocol Architecture
+description: On-chain design — PDAs, instructions, fee model, keeper, and token delegation.
 ---
 
-# Architecture
+# Protocol Architecture
 
-Recur Protocol is an Anchor program deployed on Solana. It uses Program Derived
-Addresses (PDAs) to manage subscription state and SPL Token delegation for
-non-custodial fund access.
+Recur is a non-custodial recurring payment protocol on Solana. Subscriber funds remain in their own wallet — the protocol uses SPL Token delegation to pull payments at defined intervals.
 
-**Program ID:** `3pQTZk5w2AJLpB8zVLPxgU33PkyYZAfwgMoQzZRLoAxx`
+## Token delegation model
 
-## PDAs
+1. Subscriber approves (SPL Token `approve`) a fixed USDC amount to the **Subscription PDA**
+2. The PDA acts as a delegate — it can transfer up to the approved amount from the subscriber's token account
+3. Each payment pulls one interval's amount; the keeper cannot pull more or pull early
+4. When the approval is exhausted (after N cycles), the subscriber must re-approve
+
+This is entirely non-custodial. The subscriber can revoke delegation at any time via a standard SPL Token `revoke` instruction.
+
+## Program Derived Addresses (PDAs)
 
 ### Subscription PDA
 
-Seeds: `["subscription", subscriber, merchant, plan_seed]`
+Seeds: `["subscription", subscriber_pubkey, merchant_pubkey, plan_seed(8 bytes)]`
 
-Each subscriber–merchant–plan combination has exactly one PDA. The PDA serves two
-purposes:
-
-1. **State storage** — holds the subscription parameters (amount, interval, timestamps)
-2. **Token delegate** — the subscriber delegates USDC to this PDA, which signs
-   transfer CPIs during payment processing
+Stores:
+- `subscriber`: PublicKey
+- `merchant`: PublicKey
+- `plan_seed`: [u8; 8]
+- `amount`: u64 (USDC base units per payment)
+- `interval_seconds`: u64
+- `last_payment_timestamp`: i64
+- `cancel_pending`: bool
+- `bump`: u8
 
 ### Treasury Vault PDA
 
 Seeds: `["treasury_vault"]`
 
-Singleton PDA that holds the treasury configuration (proposal count, bump). Its
-Associated Token Account receives platform fees from every payment.
-
-### Withdrawal Proposal PDA
-
-Seeds: `["withdrawal_proposal", proposer, nonce]`
-
-Created by one multisig key, approved by the other. Auto-incrementing nonce prevents
-seed collisions.
-
-## Account layout
-
-### Subscription (121 bytes total — 8 discriminator + 113 fields)
-
-| Offset | Size | Field | Type |
-|---|---|---|---|
-| 8 | 32 | subscriber | Pubkey |
-| 40 | 32 | merchant | Pubkey |
-| 72 | 8 | plan_seed | [u8; 8] |
-| 80 | 8 | amount | u64 |
-| 88 | 8 | interval | u64 |
-| 96 | 8 | last_payment_timestamp | u64 |
-| 104 | 8 | created_at | u64 |
-| 112 | 8 | cancel_requested_at | u64 |
-| 120 | 1 | bump | u8 |
+Receives the protocol fee from every payment. Controlled by the program — no external authority.
 
 ## Instructions
 
-### Subscription lifecycle
-
 | Instruction | Signer | Description |
 |---|---|---|
-| `initialize_subscription` | Subscriber | Create PDA, set amount/interval/plan_seed. First payment is immediately collectible |
-| `process_payment` | Keeper | Pull funds: subscriber → merchant (net) + treasury (fee) |
-| `request_cancel` | Subscriber or Merchant | Flag subscription for cancellation |
-| `finalize_cancel` | Permissionless | Close PDA after paid period elapses, refund rent |
-| `subscriber_cancel` | Subscriber | Immediately close PDA — subscriber forfeits prepaid time |
-| `force_cancel` | Keeper | Close PDA when delegation is revoked |
+| `initialize_subscription` | Subscriber | Creates Subscription PDA; first payment pulled immediately |
+| `process_payment` | Keeper (any) | Pulls one payment if interval has elapsed since last payment |
+| `request_cancel` | Subscriber or Merchant | Sets `cancel_pending = true`; no more payments pulled |
+| `finalize_cancel` | Anyone (permissionless) | Closes PDA after prepaid period; reclaims rent |
+| `subscriber_cancel` | Subscriber | Immediate close; forfeits remaining prepaid time |
+| `force_cancel` | Merchant | Immediate close by merchant (e.g., fraud, ToS violation) |
 
-### Treasury management
+## Fee model
 
-| Instruction | Signer | Description |
-|---|---|---|
-| `initialize_treasury` | Multisig A or B | Create treasury vault PDA + ATA |
-| `propose_withdrawal` | Multisig A or B | Create a withdrawal proposal |
-| `approve_withdrawal` | Other multisig key | Execute the withdrawal (2-of-2) |
-| `cancel_proposal` | Proposer | Cancel own proposal |
-| `cleanup_expired_proposal` | Permissionless | Clean up expired proposals |
+Every `process_payment` execution splits the payment:
 
-## Payment flow
+| Recipient | Amount |
+|---|---|
+| Merchant | `payment - fee` |
+| Treasury vault | `$0.05 + 0.25% of payment` |
+
+Minimum payment: $1.00 USDC.
+
+## Keeper
+
+The keeper is an off-chain bot that:
+
+1. Monitors all active Subscription PDAs
+2. When `current_time >= last_payment_timestamp + interval_seconds`, calls `process_payment`
+3. Fires webhooks to merchant endpoints on payment success/failure
+4. Calls `finalize_cancel` when cancel-pending subscriptions' periods elapse
+
+The keeper is permissionless — anyone can run one. The program enforces timing constraints, so a malicious keeper cannot pull early or double-charge.
+
+## First payment
+
+On `initialize_subscription`, the program sets `last_payment_timestamp = now - interval_seconds`. This means the keeper can immediately call `process_payment` for the first billing cycle — no free trial by default.
+
+## Cancel flows
 
 ```
-┌─────────────┐      ┌──────────────┐      ┌───────────────┐
-│  Subscriber  │      │   Program    │      │   Merchant    │
-│  USDC ATA    │─────>│  (PDA signs  │─────>│   USDC ATA    │
-│              │      │   CPI)       │      │               │
-└─────────────┘      │              │      └───────────────┘
-                      │              │
-                      │              │      ┌───────────────┐
-                      │              │─────>│   Treasury     │
-                      │              │      │   USDC ATA    │
-                      └──────────────┘      └───────────────┘
-
-        amount - fee ──────────────────> merchant
-                fee ──────────────────> treasury
+Active → request_cancel → Cancel Pending → (period elapses) → finalize_cancel → Closed
+Active → subscriber_cancel → Closed (immediate)
+Active → force_cancel → Closed (immediate, merchant-initiated)
 ```
 
-The Subscription PDA acts as the delegate authority. When the Keeper calls
-`process_payment`, the program uses `transfer_checked` with PDA signer seeds
-to move USDC from the subscriber's ATA to both the merchant and treasury.
+After `request_cancel`:
+- No further payments are pulled
+- The subscriber retains access until their prepaid period expires
+- Anyone can call `finalize_cancel` once the period ends
 
-## Security properties
+## Re-exported constants
 
-1. **Non-custodial** — funds never leave the subscriber's wallet until payment is due
-2. **Time-locked** — `interval` must fully elapse between payments; no early pulls
-3. **Subscriber-controlled** — revoking the token delegation immediately stops payments
-4. **Cancellation-safe** — cancel sets a flag; the already-paid period is always honored
-5. **Rent refund** — PDA rent returns to the subscriber on cancellation
-6. **2-of-2 treasury** — withdrawals require both multisig keys to approve
+```ts
+import {
+  PROGRAM_ID,
+  USDC_MINT_DEVNET,
+  findSubscriptionPda,
+  findTreasuryVaultPda,
+  planSeedToBuffer,
+  planSeedToArray,
+} from "@recur/sdk";
+```

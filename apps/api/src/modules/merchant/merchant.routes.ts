@@ -434,4 +434,134 @@ async function getOwnedApp(walletAddress: string, appId: string) {
   return app;
 }
 
+// ---------------------------------------------------------------------------
+// Analytics
+// ---------------------------------------------------------------------------
+
+router.get(
+  "/me/analytics",
+  wrap(async (req, res) => {
+    const merchant = await prisma.merchant.findUnique({
+      where: { walletAddress: req.user!.walletAddress },
+    });
+    if (!merchant)
+      throw new AppError(ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");
+
+    const apps = await prisma.app.findMany({
+      where: { merchantId: merchant.id },
+      select: { id: true },
+    });
+    const appIds = apps.map((a) => a.id);
+
+    // If no apps, return zeros
+    if (appIds.length === 0) {
+      ok(res, {
+        totalRevenue: "0",
+        activeSubscriptions: 0,
+        totalSubscribers: 0,
+        mrr: "0",
+        revenueByDay: [],
+        subscriptionsByStatus: { active: 0, cancelled: 0, past_due: 0, expired: 0 },
+        topPlans: [],
+      });
+      return;
+    }
+
+    const plans = await prisma.plan.findMany({
+      where: { appId: { in: appIds } },
+      select: { id: true, name: true, amountBaseUnits: true, intervalSeconds: true, appId: true },
+    });
+    const planIds = plans.map((p) => p.id);
+
+    // Aggregate subscriptions
+    const [activeCount, cancelledCount, pastDueCount, expiredCount] =
+      await Promise.all([
+        prisma.subscription.count({ where: { planId: { in: planIds }, status: "active" } }),
+        prisma.subscription.count({ where: { planId: { in: planIds }, status: "cancelled" } }),
+        prisma.subscription.count({ where: { planId: { in: planIds }, status: "past_due" } }),
+        prisma.subscription.count({ where: { planId: { in: planIds }, status: "expired" } }),
+      ]);
+
+    // Total unique subscribers
+    const totalSubscribers = await prisma.subscription.findMany({
+      where: { planId: { in: planIds } },
+      select: { subscriberId: true },
+      distinct: ["subscriberId"],
+    });
+
+    // Revenue (all successful transactions)
+    const transactions = await prisma.merchantTransaction.findMany({
+      where: {
+        subscription: { planId: { in: planIds } },
+        status: "success",
+      },
+      select: { amountNet: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const totalRevenue = transactions.reduce(
+      (sum, t) => sum + t.amountNet,
+      BigInt(0),
+    );
+
+    // Revenue by day (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const revenueByDay: { date: string; amount: string }[] = [];
+    const dayMap = new Map<string, bigint>();
+    for (const tx of transactions) {
+      if (tx.createdAt < thirtyDaysAgo) continue;
+      const day = tx.createdAt.toISOString().slice(0, 10);
+      dayMap.set(day, (dayMap.get(day) ?? BigInt(0)) + tx.amountNet);
+    }
+    for (const [date, amount] of dayMap.entries()) {
+      revenueByDay.push({ date, amount: amount.toString() });
+    }
+
+    // MRR: sum of active subscriptions normalized to monthly
+    const activeSubscriptions = await prisma.subscription.findMany({
+      where: { planId: { in: planIds }, status: "active" },
+      select: { planId: true },
+    });
+    const planMap = new Map(plans.map((p) => [p.id, p]));
+    let mrr = BigInt(0);
+    const MONTH_SECONDS = 30 * 24 * 60 * 60;
+    for (const sub of activeSubscriptions) {
+      const plan = planMap.get(sub.planId);
+      if (!plan) continue;
+      // Normalize to monthly: (amountBaseUnits / intervalSeconds) * MONTH_SECONDS
+      if (plan.intervalSeconds > 0) {
+        mrr += (plan.amountBaseUnits * BigInt(MONTH_SECONDS)) / BigInt(plan.intervalSeconds);
+      }
+    }
+
+    // Top plans by subscriber count
+    const topPlans = plans
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        price: p.amountBaseUnits.toString(),
+        interval: p.intervalSeconds <= 604800 ? "weekly" : p.intervalSeconds <= 2678400 ? "monthly" : "yearly",
+        activeCount: activeSubscriptions.filter((s) => s.planId === p.id).length,
+      }))
+      .sort((a, b) => b.activeCount - a.activeCount)
+      .slice(0, 5);
+
+    ok(res, {
+      totalRevenue: totalRevenue.toString(),
+      activeSubscriptions: activeCount,
+      totalSubscribers: totalSubscribers.length,
+      mrr: mrr.toString(),
+      revenueByDay,
+      subscriptionsByStatus: {
+        active: activeCount,
+        cancelled: cancelledCount,
+        past_due: pastDueCount,
+        expired: expiredCount,
+      },
+      topPlans,
+    });
+  }),
+);
+
 export default router;

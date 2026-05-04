@@ -2,9 +2,6 @@ const webpack = require("webpack");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Force webpack to process these workspace packages through all transforms
-  // (including ProvidePlugin). Without this, Next.js treats them as pre-built
-  // externals and Buffer/crypto globals are never injected.
   transpilePackages: ["@recur/sdk", "@recur/solana-client"],
 
   webpack: (config, { isServer }) => {

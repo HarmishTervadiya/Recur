@@ -24,3 +24,6 @@ test-ledger/
 *.tsbuildinfo
 coverage/
 keys/
+.brand-preview/
+*-session.jsonl
+colosseum-*

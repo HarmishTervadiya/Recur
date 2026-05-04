@@ -9,8 +9,8 @@ Recur is an open-source, non-custodial recurring payment protocol built on Solan
 
 ## How it works
 
-1. **Subscriber approves** a token delegation to a Subscription PDA
-2. **Merchant creates** a plan with amount and interval via the REST API
+1. **Merchant creates** a plan with amount and interval via the dashboard or API
+2. **Subscriber approves** a USDC token delegation to a Subscription PDA
 3. **Subscriber subscribes** by creating an on-chain Subscription PDA
 4. **Keeper** (off-chain bot) pulls payments at each billing interval
 5. **Webhooks** notify the merchant's backend of payment events
@@ -26,18 +26,22 @@ Subscribers retain full control. They can revoke the token delegation at any tim
 | Network | Solana devnet (mainnet ready) |
 | Fee | $0.05 flat + 0.25% per payment, collected by the protocol treasury |
 | Minimum | $1.00 per payment |
-| Cancel | Subscriber or merchant can `request_cancel` (paid period honored), or subscriber can `subscriber_cancel` for an immediate exit (forfeits prepaid time) |
+| Cancel | Subscriber or merchant can `request_cancel` (paid period honored), or subscriber can `subscriber_cancel` for an immediate exit |
 
-## Quick links
+## Start here
 
-- **[SDK Quickstart](/docs/sdk/quickstart)** — install and create your first subscription in 5 minutes
+- **[Getting Started](/docs/guides/getting-started)** — prerequisites, required vs optional steps, full setup flow
+- **[Backend Integration](/docs/guides/backend-integration)** — complete server-side guide (install → plans → payments → webhooks)
+- **[Webhooks](/docs/guides/webhooks)** — event types, payload format, signature verification, retry handling
+- **[API Keys](/docs/guides/api-keys)** — create, use, and secure server-to-server access
+
+## Reference
+
+- [SDK Quickstart](/docs/sdk/quickstart) — install and create your first subscription in 5 minutes
 - [Subscribe](/docs/sdk/subscribe) — build subscribe transactions and manage delegation
 - [Cancel](/docs/sdk/cancel) — cancel flows (request, immediate, finalize)
-- [Plans](/docs/sdk/plans) — create and query plans, list subscriptions
-- [Webhooks](/docs/sdk/webhooks) — verify and parse webhook payloads
+- [Plans](/docs/sdk/plans) — create and query plans
 - [Authentication](/docs/sdk/authentication) — wallet-based auth flow
 - [Error handling](/docs/sdk/errors) — typed error classes
-- [API authentication](/docs/api/authentication) — REST API auth endpoints
+- [API Reference](/docs/api) — REST endpoint docs
 - [Protocol architecture](/docs/protocol/architecture) — on-chain design and PDAs
-- [Integration](/docs/integration) — planned React components and hooks (coming soon)
-- [Server-side helpers](/docs/integration/server-side) — `RecurClient` usage from backends

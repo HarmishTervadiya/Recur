@@ -1,0 +1,330 @@
+---
+title: Webhooks
+description: Complete guide to setting up, receiving, and handling Recur webhook events.
+---
+
+# Webhooks Guide
+
+Webhooks let Recur push real-time notifications to your server when subscription events occur — payments, cancellations, failures, and more. This guide covers everything from setup to production best practices.
+
+## Setup
+
+### Option A: Via Dashboard (Recommended)
+
+1. Go to **Dashboard → Apps → [Your App]**
+2. Find the **Webhook** section
+3. Click **Add Endpoint**
+4. Enter your HTTPS URL (e.g., `https://your-server.com/webhooks/recur`)
+5. Copy the **webhook secret** (shown once — store it securely)
+
+> Each app supports **one webhook endpoint**. To change it, delete the existing one and create a new one.
+
+### Option B: Via API
+
+```ts
+import { RecurClient } from "@recur/sdk";
+
+const client = new RecurClient({
+  apiKey: process.env.RECUR_API_KEY!,
+  apiBaseUrl: process.env.RECUR_API_URL!,
+});
+
+// Create webhook endpoint
+const webhook = await client.createWebhook(appId, {
+  url: "https://your-server.com/webhooks/recur",
+});
+
+// IMPORTANT: Save webhook.secret — it's shown only once
+console.log("Webhook secret:", webhook.secret);
+```
+
+## How It Works
+
+```
+Recur Keeper processes payment
+        │
+        ▼
+Recur API dispatches webhook
+        │
+        ▼
+POST https://your-server.com/webhooks/recur
+Headers:
+  Content-Type: application/json
+  X-Recur-Signature: sha256=<hex HMAC>
+  X-Recur-Timestamp: <unix seconds>
+Body: JSON payload
+        │
+        ▼
+Your server verifies signature → processes event → responds 2xx
+```
+
+## Payload Format
+
+Every webhook delivers a JSON body with this structure:
+
+```json
+{
+  "id": "evt_cm2x7abc123",
+  "type": "payment_success",
+  "createdAt": "2025-01-15T10:30:00.000Z",
+  "data": {
+    "subscriptionId": "sub_cm2x7def456",
+    "subscriptionPda": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+    "planId": "plan_cm2x7ghi789",
+    "planName": "Pro Monthly",
+    "subscriberWallet": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+    "merchantWallet": "HN7cABqLq46Es1jh92dQQisAq662SmxELLLsHHe4YWrH",
+    "amountGross": "29000000",
+    "platformFee": "122500",
+    "amountNet": "28877500",
+    "txSignature": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d5W7rBHPG...",
+    "nextPaymentDue": "2025-02-14T10:30:00.000Z"
+  }
+}
+```
+
+### Field Reference
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique event ID — use for deduplication |
+| `type` | string | Event type (see table below) |
+| `createdAt` | ISO 8601 | When the event was created |
+| `data.subscriptionId` | string | Internal subscription ID |
+| `data.subscriptionPda` | string | On-chain PDA address (Base58) |
+| `data.planId` | string | Plan this subscription belongs to |
+| `data.planName` | string | Human-readable plan name |
+| `data.subscriberWallet` | string | Subscriber's Solana wallet (Base58) |
+| `data.merchantWallet` | string | Merchant's Solana wallet (Base58) |
+| `data.amountGross` | string | Total debited (USDC base units, 6 decimals) |
+| `data.platformFee` | string | Recur platform fee deducted |
+| `data.amountNet` | string | Net amount received by merchant |
+| `data.txSignature` | string | Solana transaction signature (for payment events) |
+| `data.nextPaymentDue` | ISO 8601 | Next billing date (for payment events) |
+
+> **Note:** Not all fields are present on every event type. Cancel events won't have `amountGross`/`txSignature`. Check `event.type` before accessing payment-specific fields.
+
+## Event Types
+
+| Event | When it fires | Key data fields |
+|-------|---------------|-----------------|
+| `subscription_created` | Subscription registered after on-chain tx confirms | subscriptionId, planId, subscriberWallet |
+| `payment_success` | Keeper collected a payment successfully | amountGross, amountNet, txSignature, nextPaymentDue |
+| `payment_failed` | Payment attempt failed (insufficient balance or delegation exhausted) | subscriptionId, subscriberWallet |
+| `cancel_requested` | Subscriber or merchant called `request_cancel` | subscriptionId, cancelRequestedAt |
+| `cancel_finalized` | Prepaid period elapsed, PDA closed on-chain | subscriptionId |
+| `cancel_forced` | Merchant force-cancelled a subscription | subscriptionId |
+| `delegation_revoked` | Subscriber revoked SPL token delegation | subscriptionId, subscriberWallet |
+
+## Signature Verification
+
+Every webhook includes HMAC-SHA256 signature in the `X-Recur-Signature` header. **Always verify before processing.**
+
+The signed content is `"${timestamp}.${rawBody}"` where:
+- `timestamp` = value of `X-Recur-Timestamp` header (Unix seconds)
+- `rawBody` = raw request body as string
+
+```ts
+import { verifyWebhookSignature, parseWebhookPayload } from "@recur/sdk";
+
+// This throws if signature is invalid or timestamp is stale (>5 min old)
+verifyWebhookSignature(rawBody, signature, timestamp, webhookSecret);
+
+const event = parseWebhookPayload(rawBody);
+```
+
+### Manual Verification (without SDK)
+
+```ts
+import crypto from "crypto";
+
+function verify(rawBody: string, signature: string, timestamp: string, secret: string) {
+  // Check timestamp freshness (reject >5 min old)
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - parseInt(timestamp)) > 300) {
+    throw new Error("Timestamp too old");
+  }
+
+  // Compute expected signature
+  const payload = `${timestamp}.${rawBody}`;
+  const expected = "sha256=" + crypto
+    .createHmac("sha256", secret)
+    .update(payload)
+    .digest("hex");
+
+  // Constant-time comparison
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+    throw new Error("Invalid signature");
+  }
+}
+```
+
+## Implementation Examples
+
+### Express
+
+```ts
+import express from "express";
+import { verifyWebhookSignature, parseWebhookPayload } from "@recur/sdk";
+
+const app = express();
+const WEBHOOK_SECRET = process.env.RECUR_WEBHOOK_SECRET!;
+
+// IMPORTANT: Use express.raw() — you need the raw body for HMAC verification
+app.post(
+  "/webhooks/recur",
+  express.raw({ type: "application/json" }),
+  (req, res) => {
+    const body = req.body.toString();
+    const signature = req.headers["x-recur-signature"] as string;
+    const timestamp = req.headers["x-recur-timestamp"] as string;
+
+    try {
+      verifyWebhookSignature(body, signature, timestamp, WEBHOOK_SECRET);
+    } catch (err) {
+      console.error("Webhook verification failed:", err);
+      return res.status(401).json({ error: "Invalid signature" });
+    }
+
+    const event = parseWebhookPayload(body);
+
+    // Deduplicate: check if you've already processed this event ID
+    // if (await db.processedEvents.exists(event.id)) return res.status(200).end();
+
+    handleEvent(event);
+    res.status(200).json({ received: true });
+  },
+);
+```
+
+### Next.js App Router
+
+```ts title="app/api/webhooks/recur/route.ts"
+import { verifyWebhookSignature, parseWebhookPayload } from "@recur/sdk";
+
+export async function POST(req: Request) {
+  const body = await req.text();
+  const signature = req.headers.get("x-recur-signature")!;
+  const timestamp = req.headers.get("x-recur-timestamp")!;
+  const secret = process.env.RECUR_WEBHOOK_SECRET!;
+
+  try {
+    verifyWebhookSignature(body, signature, timestamp, secret);
+  } catch {
+    return new Response("Invalid signature", { status: 401 });
+  }
+
+  const event = parseWebhookPayload(body);
+
+  switch (event.type) {
+    case "payment_success":
+      // Extend user's subscription period
+      break;
+    case "payment_failed":
+      // Start grace period, notify user
+      break;
+    case "cancel_finalized":
+      // Revoke access
+      break;
+  }
+
+  return Response.json({ received: true });
+}
+```
+
+### Fastify
+
+```ts
+import Fastify from "fastify";
+import { verifyWebhookSignature, parseWebhookPayload } from "@recur/sdk";
+
+const app = Fastify();
+const WEBHOOK_SECRET = process.env.RECUR_WEBHOOK_SECRET!;
+
+// Tell Fastify to keep raw body
+app.addContentTypeParser(
+  "application/json",
+  { parseAs: "string" },
+  (req, body, done) => done(null, body),
+);
+
+app.post("/webhooks/recur", async (request, reply) => {
+  const body = request.body as string;
+  const signature = request.headers["x-recur-signature"] as string;
+  const timestamp = request.headers["x-recur-timestamp"] as string;
+
+  try {
+    verifyWebhookSignature(body, signature, timestamp, WEBHOOK_SECRET);
+  } catch {
+    return reply.status(401).send({ error: "Invalid signature" });
+  }
+
+  const event = parseWebhookPayload(body);
+  handleEvent(event);
+
+  return { received: true };
+});
+```
+
+## Retry Policy
+
+If your endpoint doesn't respond with a `2xx` status within **5 seconds**, Recur retries:
+
+| Attempt | Delay after failure |
+|---------|-------------------|
+| 1st retry | 1 minute |
+| 2nd retry | 5 minutes |
+| 3rd retry | 30 minutes |
+| 4th retry | 2 hours |
+| 5th retry | 12 hours |
+
+**After 5 retries (6 total attempts):** The delivery is marked as **permanently failed**. No further retries are attempted for that specific event.
+
+### Handling Retry Exhaustion
+
+To avoid missing events after retry exhaustion:
+
+1. **Monitor delivery status** via the API:
+   ```ts
+   const deliveries = await client.listWebhookDeliveries(webhookId);
+   // Check for status: "failed" entries
+   ```
+
+2. **Poll as fallback** — periodically query subscriptions/transactions to catch any missed events:
+   ```ts
+   const recent = await client.listTransactions(appId, { since: lastCheckedAt });
+   ```
+
+3. **Set up alerting** — if your webhook endpoint is consistently failing, investigate immediately.
+
+## Best Practices
+
+### Security
+- **Always verify signatures** — never process unverified webhooks
+- **Use HTTPS** — webhook URLs must be HTTPS in production
+- **Keep secrets secure** — store webhook secrets in environment variables, not code
+
+### Reliability
+- **Respond quickly** — return `2xx` within 5 seconds, process asynchronously if needed
+- **Deduplicate events** — use `event.id` to prevent double-processing on retries
+- **Be idempotent** — the same event delivered twice should produce the same result
+
+### Debugging
+- **Log raw payloads** in development for debugging
+- **Use webhook.site** for testing — verify Recur is sending events before writing handler logic
+- **Check delivery logs** in the dashboard for failed deliveries
+
+## Testing Locally
+
+Use a tunnel service to expose your local server:
+
+```bash
+# Using ngrok
+ngrok http 3001
+# Use the https://xxx.ngrok.io URL as your webhook endpoint
+
+# Using localtunnel
+npx localtunnel --port 3001
+```
+
+Then trigger a test event by creating a subscription on devnet — the Keeper will process it and fire a webhook.

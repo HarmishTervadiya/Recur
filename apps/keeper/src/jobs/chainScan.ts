@@ -40,7 +40,7 @@ export async function chainScan(): Promise<void> {
         await prisma.subscription.findMany({
           select: { subscriptionPda: true },
         })
-      ).map((s) => s.subscriptionPda),
+      ).map((s: { subscriptionPda: string }) => s.subscriptionPda),
     );
 
     let discovered = 0;
@@ -96,7 +96,7 @@ export async function chainScan(): Promise<void> {
       }
 
       // Find the first active plan for this merchant (best effort)
-      const plans = merchantRecord.apps.flatMap((a) => a.plans);
+      const plans = merchantRecord.apps.flatMap((a: { plans: Array<{ id: string; planSeed: string | null }> }) => a.plans);
       if (plans.length === 0) {
         logger.warn(
           { pda: pdaStr },
@@ -107,7 +107,7 @@ export async function chainScan(): Promise<void> {
 
       // Match plan_seed from on-chain data to plan.planSeed for exact match
       const matchedPlan =
-        plans.find((p) => p.planSeed === planSeedHex) ?? plans[0];
+        plans.find((p: { id: string; planSeed: string | null }) => p.planSeed === planSeedHex) ?? plans[0];
 
       await reportSubscriptionCreated({
         subscriptionPda: pdaStr,

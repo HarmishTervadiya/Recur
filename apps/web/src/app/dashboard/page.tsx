@@ -192,8 +192,51 @@ export default function DashboardOverview() {
   const totalPlans = merchant?.apps?.reduce((sum, a) => sum + (a._count?.plans ?? 0), 0) ?? 0;
   const hasApps = totalApps > 0;
 
+  const [showAnnouncement, setShowAnnouncement] = useState(true);
+
   return (
     <div>
+      {showAnnouncement && (
+        <div className="sticky top-0 z-10 mb-6 motion-safe:animate-page-enter">
+          <div className="relative overflow-hidden rounded-[12px] border border-recur-border-light bg-gradient-to-r from-recur-purple-tint via-recur-card to-recur-purple-tint p-4">
+            {/* Decorative top accent line */}
+            <div
+              className="absolute top-0 left-0 right-0 h-[2px] bg-[linear-gradient(90deg,transparent,theme(colors.recur.primary),theme(colors.recur.light),theme(colors.recur.primary),transparent)]"
+              aria-hidden="true"
+            />
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2 rounded-[10px] bg-recur-primary/10 text-recur-light shrink-0">
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                    <rect x="2.5" y="4.5" width="13" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+                    <path d="M6 4.5V3a1.5 1.5 0 011.5-1.5h3A1.5 1.5 0 0112 3v1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    <path d="M2.5 8.5h13" stroke="currentColor" strokeWidth="1.5" />
+                    <rect x="7.5" y="7" width="3" height="3" rx="0.75" fill="currentColor" />
+                  </svg>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[13px] font-bold text-recur-text-heading">
+                    📦 @recur/react SDK — Releasing soon on npm
+                  </p>
+                  <p className="text-[11px] text-recur-text-muted mt-0.5">
+                    The work is complete — final npm release is imminent. Stay tuned!
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAnnouncement(false)}
+                className="p-1.5 rounded-[8px] text-recur-text-dim hover:text-recur-text-muted hover:bg-recur-border/30 motion-safe:transition-colors duration-200 shrink-0"
+                aria-label="Dismiss announcement"
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                  <path d="M3.5 3.5l7 7M10.5 3.5l-7 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mb-8">
         <h1 className="text-[26px] font-bold text-recur-text-heading mb-1">
           Dashboard

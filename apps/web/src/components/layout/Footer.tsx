@@ -12,13 +12,13 @@ export function Footer() {
             </span>
           </div>
           <div className="flex items-center gap-6 text-[12px] text-recur-text-muted">
-            <a href="#" className="hover:text-recur-light transition-colors">
+            <a href="https://docs-recur.vercel.app/" target="_blank" rel="noopener noreferrer" className="hover:text-recur-light transition-colors">
               Docs
             </a>
-            <a href="#" className="hover:text-recur-light transition-colors">
+            <a href="https://github.com/HarmishTervadiya/Recur" target="_blank" rel="noopener noreferrer" className="hover:text-recur-light transition-colors">
               GitHub
             </a>
-            <a href="#" className="hover:text-recur-light transition-colors">
+            <a href="https://x.com/RecurSolana" target="_blank" rel="noopener noreferrer" className="hover:text-recur-light transition-colors">
               Twitter
             </a>
             <a href="#" className="hover:text-recur-light transition-colors">

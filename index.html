@@ -3,8 +3,29 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Recur</title>
+<title>Recur — On-chain Recurring Billing for Solana</title>
 <meta name="description" content="The on-chain billing infrastructure for Solana. Users sign once, keepers collect automatically, merchants get USDC direct to wallet.">
+
+<!-- Favicon -->
+<link rel="icon" type="image/png" href="./public/favicon.png">
+<link rel="apple-touch-icon" href="./public/favicon.png">
+
+<!-- Open Graph / Facebook -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://recur-pay.vercel.app/">
+<meta property="og:title" content="Recur — On-chain Recurring Billing for Solana">
+<meta property="og:description" content="Users sign once, keepers collect automatically, merchants get USDC direct to wallet. No bank, no KYC, no EVM.">
+<meta property="og:image" content="https://recur-pay.vercel.app/public/banner.jpg">
+
+<!-- Twitter / X -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@RecurSolana">
+<meta name="twitter:title" content="Recur — On-chain Recurring Billing for Solana">
+<meta name="twitter:description" content="Users sign once, keepers collect automatically, merchants get USDC direct to wallet. No bank, no KYC, no EVM.">
+<meta name="twitter:image" content="https://recur-pay.vercel.app/public/banner.jpg">
+
+<!-- Canonical -->
+<link rel="canonical" href="https://recur-pay.vercel.app/">
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -201,8 +222,8 @@ tailwind.config = {
     <div class="hidden md:flex items-center gap-6">
       <a href="#how-it-works" class="text-[13px] text-text-muted hover:text-brand-light transition-colors">how it works</a>
       <a href="#pricing" class="text-[13px] text-text-muted hover:text-brand-light transition-colors">pricing</a>
-      <a href="#sdk" class="text-[13px] text-text-muted hover:text-brand-light transition-colors">docs</a>
-      <a href="https://github.com" class="text-[13px] text-text-muted hover:text-brand-light transition-colors">github</a>
+      <a href="https://docs-recur.vercel.app/" target="_blank" rel="noopener noreferrer" class="text-[13px] text-text-muted hover:text-brand-light transition-colors">docs</a>
+      <a href="https://github.com/HarmishTervadiya/Recur" target="_blank" rel="noopener noreferrer" class="text-[13px] text-text-muted hover:text-brand-light transition-colors">github</a>
     </div>
     
     <!-- CTA -->
@@ -220,8 +241,8 @@ tailwind.config = {
     <div class="max-w-container mx-auto px-6 py-4 flex flex-col gap-3">
       <a href="#how-it-works" class="text-[13px] text-text-muted hover:text-brand-light py-1">how it works</a>
       <a href="#pricing" class="text-[13px] text-text-muted hover:text-brand-light py-1">pricing</a>
-      <a href="#sdk" class="text-[13px] text-text-muted hover:text-brand-light py-1">docs</a>
-      <a href="https://github.com" class="text-[13px] text-text-muted hover:text-brand-light py-1">github</a>
+      <a href="https://docs-recur.vercel.app/" target="_blank" rel="noopener noreferrer" class="text-[13px] text-text-muted hover:text-brand-light py-1">docs</a>
+      <a href="https://github.com/HarmishTervadiya/Recur" target="_blank" rel="noopener noreferrer" class="text-[13px] text-text-muted hover:text-brand-light py-1">github</a>
     </div>
   </div>
 </nav>
@@ -256,8 +277,8 @@ tailwind.config = {
         
         <!-- CTAs -->
         <div class="flex gap-3 flex-wrap">
-          <a href="#sdk" class="recur-demo-btn text-[14px] font-bold px-6 py-3 rounded-[10px] bg-brand-primary text-white">start building</a>
-          <a href="#how-it-works" class="text-[14px] font-semibold px-6 py-3 rounded-[10px] bg-transparent text-brand-light border border-border-light hover:border-brand-primary transition-colors">view docs</a>
+          <a href="https://docs-recur.vercel.app/" target="_blank" rel="noopener noreferrer" class="recur-demo-btn text-[14px] font-bold px-6 py-3 rounded-[10px] bg-brand-primary text-white">start building</a>
+          <a href="https://docs-recur.vercel.app/" target="_blank" rel="noopener noreferrer" class="text-[14px] font-semibold px-6 py-3 rounded-[10px] bg-transparent text-brand-light border border-border-light hover:border-brand-primary transition-colors">view docs</a>
         </div>
         
         <!-- Stats -->
@@ -884,7 +905,7 @@ tailwind.config = {
     <p class="text-[16px] text-text-body max-w-[440px] mx-auto mb-8">Three lines of code. One transaction. Recurring revenue on Solana.</p>
     <div class="flex items-center justify-center gap-3 flex-wrap">
       <a href="#" class="recur-demo-btn text-[14px] font-bold px-8 py-3.5 rounded-[10px] bg-brand-primary text-white">connect wallet</a>
-      <a href="#sdk" class="text-[14px] font-semibold px-8 py-3.5 rounded-[10px] text-brand-light border border-border-light hover:border-brand-primary transition-colors">read the docs</a>
+      <a href="https://docs-recur.vercel.app/" target="_blank" rel="noopener noreferrer" class="text-[14px] font-semibold px-8 py-3.5 rounded-[10px] text-brand-light border border-border-light hover:border-brand-primary transition-colors">read the docs</a>
     </div>
     
     <!-- Tiny Solana badge -->
@@ -908,9 +929,9 @@ tailwind.config = {
         <span class="text-[12px] text-text-dim">On-chain billing infrastructure for Solana</span>
       </div>
       <div class="flex items-center gap-6 text-[12px] text-text-muted">
-        <a href="#" class="hover:text-brand-light transition-colors">docs</a>
-        <a href="#" class="hover:text-brand-light transition-colors">github</a>
-        <a href="#" class="hover:text-brand-light transition-colors">twitter</a>
+        <a href="https://docs-recur.vercel.app/" target="_blank" rel="noopener noreferrer" class="hover:text-brand-light transition-colors">docs</a>
+        <a href="https://github.com/HarmishTervadiya/Recur" target="_blank" rel="noopener noreferrer" class="hover:text-brand-light transition-colors">github</a>
+        <a href="https://x.com/RecurSolana" target="_blank" rel="noopener noreferrer" class="hover:text-brand-light transition-colors">twitter</a>
         <a href="#" class="hover:text-brand-light transition-colors">discord</a>
       </div>
     </div>

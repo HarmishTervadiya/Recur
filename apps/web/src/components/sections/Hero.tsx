@@ -82,10 +82,10 @@ export function Hero() {
             </p>
 
             <div className="section-animate flex gap-3 flex-wrap">
-              <button className="btn-primary text-[14px]">
+              <a href="https://docs-recur.vercel.app/" target="_blank" rel="noopener noreferrer" className="btn-primary text-[14px]">
                 Start Building
-              </button>
-              <button className="btn-secondary text-[14px]">View Docs</button>
+              </a>
+              <a href="https://docs-recur.vercel.app/" target="_blank" rel="noopener noreferrer" className="btn-secondary text-[14px]">View Docs</a>
             </div>
 
             <div

@@ -12,9 +12,9 @@ export function CTA() {
           <button className="btn-primary text-[14px] px-8 py-3.5">
             Connect Wallet
           </button>
-          <button className="btn-secondary text-[14px] px-8 py-3.5">
+          <a href="https://docs-recur.vercel.app/" target="_blank" rel="noopener noreferrer" className="btn-secondary text-[14px] px-8 py-3.5">
             Read the Docs
-          </button>
+          </a>
         </div>
 
         <div className="mt-10 flex items-center justify-center gap-2 text-[11px] text-recur-text-dim">

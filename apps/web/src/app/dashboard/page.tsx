@@ -131,6 +131,7 @@ function EmptyAppsState() {
 export default function DashboardOverview() {
   const [merchant, setMerchant] = useState<MerchantProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showAnnouncement, setShowAnnouncement] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -192,7 +193,7 @@ export default function DashboardOverview() {
   const totalPlans = merchant?.apps?.reduce((sum, a) => sum + (a._count?.plans ?? 0), 0) ?? 0;
   const hasApps = totalApps > 0;
 
-  const [showAnnouncement, setShowAnnouncement] = useState(true);
+
 
   return (
     <div>

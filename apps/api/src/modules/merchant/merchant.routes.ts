@@ -253,18 +253,22 @@ const CreateWebhookBody = z.object({
   url: z.string().url(),
   // Validate each event string against the known EventType enum.
   // Defined inline with Zod 4 to avoid cross-version incompatibility with @recur/types (Zod 3).
-  events: z.array(z.enum([
-    "subscription_created",
-    "payment_success",
-    "payment_failed",
-    "cancel_requested",
-    "cancel_finalized",
-    "cancel_forced",
-    "delegation_revoked",
-    "platform_pro_activated",
-    "platform_pro_past_due",
-    "platform_pro_downgraded",
-  ])).default([]),
+  events: z
+    .array(
+      z.enum([
+        "subscription_created",
+        "payment_success",
+        "payment_failed",
+        "cancel_requested",
+        "cancel_finalized",
+        "cancel_forced",
+        "delegation_revoked",
+        "platform_pro_activated",
+        "platform_pro_past_due",
+        "platform_pro_downgraded",
+      ]),
+    )
+    .default([]),
 });
 
 router.post(
@@ -461,7 +465,12 @@ router.get(
         totalSubscribers: 0,
         mrr: "0",
         revenueByDay: [],
-        subscriptionsByStatus: { active: 0, cancelled: 0, past_due: 0, expired: 0 },
+        subscriptionsByStatus: {
+          active: 0,
+          cancelled: 0,
+          past_due: 0,
+          expired: 0,
+        },
         topPlans: [],
       });
       return;
@@ -469,17 +478,31 @@ router.get(
 
     const plans = await prisma.plan.findMany({
       where: { appId: { in: appIds } },
-      select: { id: true, name: true, amountBaseUnits: true, intervalSeconds: true, appId: true },
+      select: {
+        id: true,
+        name: true,
+        amountBaseUnits: true,
+        intervalSeconds: true,
+        appId: true,
+      },
     });
     const planIds = plans.map((p) => p.id);
 
     // Aggregate subscriptions
     const [activeCount, cancelledCount, pastDueCount, expiredCount] =
       await Promise.all([
-        prisma.subscription.count({ where: { planId: { in: planIds }, status: "active" } }),
-        prisma.subscription.count({ where: { planId: { in: planIds }, status: "cancelled" } }),
-        prisma.subscription.count({ where: { planId: { in: planIds }, status: "past_due" } }),
-        prisma.subscription.count({ where: { planId: { in: planIds }, status: "expired" } }),
+        prisma.subscription.count({
+          where: { planId: { in: planIds }, status: "active" },
+        }),
+        prisma.subscription.count({
+          where: { planId: { in: planIds }, status: "cancelled" },
+        }),
+        prisma.subscription.count({
+          where: { planId: { in: planIds }, status: "past_due" },
+        }),
+        prisma.subscription.count({
+          where: { planId: { in: planIds }, status: "expired" },
+        }),
       ]);
 
     // Total unique subscribers
@@ -523,7 +546,8 @@ router.get(
       where: { planId: { in: planIds }, status: "active" },
       select: { planId: true },
     });
-    const planMap = new Map(plans.map((p) => [p.id, p]));
+    // const planMap = new Map(plans.map((p) => [p.id, p]));
+    const planMap = new Map<string, any>(plans.map((p: any) => [p.id, p]));
     let mrr = BigInt(0);
     const MONTH_SECONDS = 30 * 24 * 60 * 60;
     for (const sub of activeSubscriptions) {
@@ -531,7 +555,9 @@ router.get(
       if (!plan) continue;
       // Normalize to monthly: (amountBaseUnits / intervalSeconds) * MONTH_SECONDS
       if (plan.intervalSeconds > 0) {
-        mrr += (plan.amountBaseUnits * BigInt(MONTH_SECONDS)) / BigInt(plan.intervalSeconds);
+        mrr +=
+          (plan.amountBaseUnits * BigInt(MONTH_SECONDS)) /
+          BigInt(plan.intervalSeconds);
       }
     }
 
@@ -541,8 +567,14 @@ router.get(
         id: p.id,
         name: p.name,
         price: p.amountBaseUnits.toString(),
-        interval: p.intervalSeconds <= 604800 ? "weekly" : p.intervalSeconds <= 2678400 ? "monthly" : "yearly",
-        activeCount: activeSubscriptions.filter((s) => s.planId === p.id).length,
+        interval:
+          p.intervalSeconds <= 604800
+            ? "weekly"
+            : p.intervalSeconds <= 2678400
+              ? "monthly"
+              : "yearly",
+        activeCount: activeSubscriptions.filter((s) => s.planId === p.id)
+          .length,
       }))
       .sort((a, b) => b.activeCount - a.activeCount)
       .slice(0, 5);

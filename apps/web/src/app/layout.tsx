@@ -7,6 +7,7 @@ import { ToastProvider } from "../components/ui/ToastProvider";
 import { ErrorBoundary } from "../components/ui/ErrorBoundary";
 import { ScrollAnimator } from "../components/ui/ScrollAnimator";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const jetbrainsMono = JetBrains_Mono({
@@ -116,6 +117,8 @@ export default function RootLayout({
             </ThemeProvider>
           </AuthProvider>
         </WalletProvider>
+
+        <Analytics />
       </body>
     </html>
   );

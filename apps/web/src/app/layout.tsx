@@ -8,6 +8,7 @@ import { ErrorBoundary } from "../components/ui/ErrorBoundary";
 import { ScrollAnimator } from "../components/ui/ScrollAnimator";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const jetbrainsMono = JetBrains_Mono({
@@ -119,6 +120,7 @@ export default function RootLayout({
         </WalletProvider>
 
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
